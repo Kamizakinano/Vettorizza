@@ -1,0 +1,61 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dipendenze
+        run: pip install -r requirements-dev.txt
+      - name: Test
+        run: python -m pytest -q
+      - name: Crea Vettorizza.exe
+        run: pyinstaller --noconfirm Vettorizza.spec
+      - name: Prova di avvio (CLI senza finestra)
+        shell: pwsh
+        run: |
+          python -c "import sys; sys.path.insert(0, 'tests'); from conftest import make_toy; from PIL import Image; Image.fromarray(make_toy()).save('prova.png')"
+          python -m vettorizza cli prova.png -o prova_out --sfondo classico
+          if (-not (Test-Path prova_out/prova.3mf)) { exit 1 }
+      - name: Prova dell'eseguibile
+        shell: pwsh
+        run: |
+          Start-Process -Wait -FilePath dist/Vettorizza/Vettorizza.exe -ArgumentList "cli","prova.png","-o","prova_exe","--sfondo","classico"
+          if (-not (Test-Path prova_exe/prova.3mf)) { exit 1 }
+          if (-not (Test-Path prova_exe/prova.dxf)) { exit 1 }
+      - name: Comprimi
+        shell: pwsh
+        run: Compress-Archive -Path dist/Vettorizza -DestinationPath Vettorizza-Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Vettorizza-Windows
+          path: Vettorizza-Windows.zip
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Vettorizza-Windows.zip

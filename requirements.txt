@@ -1,0 +1,7 @@
+numpy>=1.26
+opencv-python-headless>=4.9
+Pillow>=10.0
+PySide6-Essentials>=6.6
+mapbox_earcut>=1.0.1
+ezdxf>=1.1
+onnxruntime>=1.17
