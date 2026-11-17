@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buoni MakerWorld</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1d2330;--mut:#6b7280;--acc:#00ae42;--bd:#e3e6eb}
+@media (prefers-color-scheme:dark){:root{--bg:#14171c;--card:#1d2128;--fg:#e8eaed;--mut:#9aa0a8;--bd:#2c313a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,sans-serif}
+main{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:8px 0 16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px}
+form{display:flex;flex-wrap:wrap;gap:8px}
+input,textarea,select{font:inherit;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--fg)}
+#code{flex:2 1 200px}#amount{flex:1 1 100px}
+button{font:inherit;padding:10px 14px;border:0;border-radius:8px;background:var(--acc);color:#fff;cursor:pointer}
+button.sec{background:transparent;color:var(--fg);border:1px solid var(--bd)}
+textarea{width:100%;min-height:90px}
+.tot{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut)}
+.tot b{color:var(--fg);font-size:1.2rem}
+ul{list-style:none;padding:0;margin:0}
+li{display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--bd)}
+li:first-child{border-top:0}
+li .c{flex:1;font-family:ui-monospace,monospace;word-break:break-all}
+li.used .c{text-decoration:line-through;color:var(--mut)}
+li .a{font-weight:600;white-space:nowrap}
+li button{padding:6px 10px;font-size:.85rem}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 14px;border-radius:8px;opacity:0;transition:.2s}
+</style>
+</head>
+<body><main>
+<h1>Buoni MakerWorld</h1>
+<div class="card">
+ <form id="f">
+  <input id="code" placeholder="Codice buono" required autocomplete="off">
+  <input id="amount" type="number" step="0.01" min="0" placeholder="Importo" required>
+  <button>Aggiungi</button>
+ </form>
+</div>
+<div class="card">
+ <label for="bulk">Incolla più buoni (una riga per buono: <code>CODICE importo</code>)</label>
+ <textarea id="bulk" placeholder="ABCD-1234 5&#10;EFGH-5678 10"></textarea>
+ <button id="imp" style="margin-top:8px">Importa</button>
+</div>
+<div class="card">
+ <div class="tot"><span>Disponibili: <b id="tAv">0</b></span><span>Usati: <b id="tUs">0</b></span></div>
+</div>
+<div class="card">
+ <div class="bar">
+  <select id="flt"><option value="av">Disponibili</option><option value="used">Usati</option><option value="all">Tutti</option></select>
+  <button class="sec" id="copyAll">Copia disponibili</button>
+  <button class="sec" id="exp">Esporta</button>
+ </div>
+ <ul id="list"></ul>
+</div>
+</main>
+<div id="toast"></div>
+<script>
+const K='mw-buoni';let data=[];
+try{data=JSON.parse(localStorage.getItem(K))||[]}catch(e){}
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(data))}catch(e){}render()};
+const fmt=n=>n.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2});
+const toast=t=>{const e=document.getElementById('toast');e.textContent=t;e.style.opacity=1;setTimeout(()=>e.style.opacity=0,1200)};
+const copy=t=>navigator.clipboard.writeText(t).then(()=>toast('Copiato!'),()=>toast('Copia non riuscita'));
+function add(code,amount){code=code.trim();if(!code||isNaN(amount))return false;
+ if(data.some(d=>d.code===code)){toast('Codice già presente');return false}
+ data.unshift({code,amount,used:false,date:Date.now()});return true}
+document.getElementById('f').onsubmit=e=>{e.preventDefault();
+ if(add(code.value,parseFloat(amount.value.replace(',','.')))){code.value='';amount.value='';save();code.focus()}};
+document.getElementById('imp').onclick=()=>{let n=0;
+ bulk.value.split('\n').forEach(l=>{const m=l.trim().match(/^(\S+)[\s,;:\t-]+[€$]?\s*([\d.,]+)/);if(m&&add(m[1],parseFloat(m[2].replace(',','.'))))n++});
+ bulk.value='';save();toast(n+' buoni importati')};
+document.getElementById('flt').onchange=render;
+document.getElementById('copyAll').onclick=()=>copy(data.filter(d=>!d.used).map(d=>d.code).join('\n'));
+document.getElementById('exp').onclick=()=>copy(data.map(d=>d.code+' '+d.amount+(d.used?' (usato)':'')).join('\n'));
+function render(){const f=flt.value,ul=document.getElementById('list');ul.innerHTML='';
+ tAv.textContent=fmt(data.filter(d=>!d.used).reduce((s,d)=>s+d.amount,0));
+ tUs.textContent=fmt(data.filter(d=>d.used).reduce((s,d)=>s+d.amount,0));
+ data.filter(d=>f==='all'||(f==='used')===d.used).forEach(d=>{
+  const li=document.createElement('li');if(d.used)li.className='used';
+  li.innerHTML=`<span class="c"></span><span class="a">${fmt(d.amount)}</span>`;
+  li.querySelector('.c').textContent=d.code;
+  const b=(t,fn,c)=>{const x=document.createElement('button');x.textContent=t;if(c)x.className=c;x.onclick=fn;li.append(x)};
+  b('Copia',()=>copy(d.code));
+  b(d.used?'Ripristina':'Usato',()=>{d.used=!d.used;save()},'sec');
+  b('✕',()=>{if(confirm('Eliminare '+d.code+'?')){data=data.filter(x=>x!==d);save()}},'sec');
+  ul.append(li)});
+ if(!ul.children.length)ul.innerHTML='<li style="color:var(--mut)">Nessun buono</li>'}
+render();
+</script>
+</body></html>
