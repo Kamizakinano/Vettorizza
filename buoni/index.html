@@ -50,6 +50,7 @@ li button{padding:6px 10px;font-size:.85rem}
 </div>
 <div class="card">
  <div class="tot" style="margin-bottom:8px"><span>Punti attuali: <b id="pNow">—</b></span><span id="pDiff"></span></div>
+ <div id="pGoal" style="margin-bottom:10px"></div>
  <form id="pf"><input id="pts" type="number" step="1" min="0" placeholder="Punti adesso" required style="flex:1 1 140px"><button>Salva punti</button></form>
  <details open style="margin-top:8px"><summary>Storico punti</summary><ul id="pList"></ul></details>
 </div>
@@ -123,6 +124,8 @@ try{pts=JSON.parse(localStorage.getItem(PK))||[]}catch(e){}
 function pRender(){const l=document.getElementById('pList');l.innerHTML='';
  pNow.textContent=pts.length?pts[0].p.toLocaleString('it-IT'):'—';
  pDiff.textContent=pts.length>1?((pts[0].p-pts[1].p>=0?'+':'')+(pts[0].p-pts[1].p).toLocaleString('it-IT')+' dall\'ultima volta'):'';
+ const P=524,cur=pts.length?pts[0].p:0,nB=Math.floor(cur/P),rest=cur%P;
+ pGoal.innerHTML=`<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px"><span>🎟️ Buoni raggiunti: <b style="font-size:1.2rem">${nB}</b></span><span style="color:var(--mut)">mancano <b style="color:var(--fg)">${P-rest}</b> punti al prossimo</span></div><div style="height:10px;background:var(--bd);border-radius:5px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${rest/P*100}%;background:var(--acc)"></div></div><div style="color:var(--mut);font-size:.85rem;margin-top:4px">${rest} / ${P} punti</div>`;
  pts.forEach((x,i)=>{const li=document.createElement('li');
   li.innerHTML=`<span class="c" style="font-family:system-ui">${new Date(x.t).toLocaleString('it-IT',{dateStyle:'short',timeStyle:'short'})}</span><span class="a">${x.p.toLocaleString('it-IT')}</span>`;
   if(i<pts.length-1){const d=x.p-pts[i+1].p,s=document.createElement('span');s.textContent=(d>=0?'+':'')+d.toLocaleString('it-IT');s.style.cssText='font-weight:600;margin:0 auto;color:'+(d>0?'var(--acc)':d<0?'#d33':'var(--mut)');li.querySelector('.a').before(s)}
