@@ -125,7 +125,8 @@ function pRender(){const l=document.getElementById('pList');l.innerHTML='';
  pDiff.textContent=pts.length>1?((pts[0].p-pts[1].p>=0?'+':'')+(pts[0].p-pts[1].p).toLocaleString('it-IT')+' dall\'ultima volta'):'';
  pts.forEach((x,i)=>{const li=document.createElement('li');
   li.innerHTML=`<span class="c" style="font-family:system-ui">${new Date(x.t).toLocaleString('it-IT',{dateStyle:'short',timeStyle:'short'})}</span><span class="a">${x.p.toLocaleString('it-IT')}</span>`;
-  if(i<pts.length-1){const d=x.p-pts[i+1].p,s=document.createElement('span');s.textContent=(d>=0?'+':'')+d.toLocaleString('it-IT');s.style.cssText='font-weight:600;min-width:56px;text-align:right;color:'+(d>0?'var(--acc)':d<0?'#d33':'var(--mut)');li.append(s)}
+  if(i<pts.length-1){const d=x.p-pts[i+1].p,s=document.createElement('span');s.textContent=(d>=0?'+':'')+d.toLocaleString('it-IT');s.style.cssText='font-weight:600;margin:0 auto;color:'+(d>0?'var(--acc)':d<0?'#d33':'var(--mut)');li.querySelector('.a').before(s)}
+  li.style.flexWrap='nowrap';li.querySelector('.c').style.flex='0 1 auto';
   const b=document.createElement('button');b.className='sec';b.textContent='✕';b.onclick=()=>{if(confirm('Eliminare questa voce?')){pts.splice(i,1);pSave()}};li.append(b);l.append(li)});
  if(!pts.length)l.innerHTML='<li style="color:var(--mut)">Nessuna voce</li>'}
 function pSave(){try{localStorage.setItem(PK,JSON.stringify(pts))}catch(e){}pRender();cloudSave()}
