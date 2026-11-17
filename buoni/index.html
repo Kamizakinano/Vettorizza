@@ -23,7 +23,7 @@ textarea{width:100%;min-height:90px}
 ul{list-style:none;padding:0;margin:0}
 li{display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--bd)}
 li:first-child{border-top:0}
-li .c{flex:1;font-family:ui-monospace,monospace;word-break:break-all}
+li .c{flex:1;-webkit-user-select:text;user-select:text;font-family:ui-monospace,monospace;word-break:break-all}
 li.used .c{text-decoration:line-through;color:var(--mut)}
 li .a{font-weight:600;white-space:nowrap}
 li button{padding:6px 10px;font-size:.85rem}
@@ -75,7 +75,8 @@ try{data=JSON.parse(localStorage.getItem(K))||[]}catch(e){}
 const save=()=>{try{localStorage.setItem(K,JSON.stringify(data))}catch(e){}render()};
 const fmt=n=>n.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2});
 const toast=t=>{const e=document.getElementById('toast');e.textContent=t;e.style.opacity=1;setTimeout(()=>e.style.opacity=0,1200)};
-const copy=t=>navigator.clipboard.writeText(t).then(()=>toast('Copiato!'),()=>toast('Copia non riuscita'));
+function copyFallback(t){const a=document.createElement('textarea');a.value=t;a.setAttribute('readonly','');a.style.cssText='position:fixed;top:0;left:0;opacity:0;font-size:16px';document.body.append(a);a.focus();a.select();a.setSelectionRange(0,t.length);let ok=false;try{ok=document.execCommand('copy')}catch(e){}a.remove();if(ok)toast('Copiato!');else prompt('Copia il codice:',t)}
+const copy=t=>{if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(t).then(()=>toast('Copiato!'),()=>copyFallback(t));else copyFallback(t)};
 const st=d=>d.used?'used':d.reserved?'res':'av';
 function add(code,amount,desc='',reserved=false){code=code.trim();if(!code||isNaN(amount))return false;
  if(data.some(d=>d.code===code)){toast('Codice già presente');return false}
