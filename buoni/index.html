@@ -33,6 +33,7 @@ li button{padding:6px 10px;font-size:.85rem}
 </head>
 <body><main>
 <h1>Buoni MakerWorld</h1>
+<p id="sync" style="color:var(--mut);margin:-8px 0 12px;font-size:.9rem">⚠️ Salvataggio solo locale: accedi a claude.ai per salvare nel tuo account</p>
 <div class="card">
  <form id="f">
   <input id="code" placeholder="Codice buono" required autocomplete="off">
@@ -72,7 +73,7 @@ li button{padding:6px 10px;font-size:.85rem}
 <script>
 const K='mw-buoni';let data=[];
 try{data=JSON.parse(localStorage.getItem(K))||[]}catch(e){}
-const save=()=>{try{localStorage.setItem(K,JSON.stringify(data))}catch(e){}render()};
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(data))}catch(e){}render();cloudSave()};
 const fmt=n=>n.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2});
 const toast=t=>{const e=document.getElementById('toast');e.textContent=t;e.style.opacity=1;setTimeout(()=>e.style.opacity=0,1200)};
 function copyFallback(t){const a=document.createElement('textarea');a.value=t;a.setAttribute('readonly','');a.style.cssText='position:fixed;top:0;left:0;opacity:0;font-size:16px';document.body.append(a);a.focus();a.select();a.setSelectionRange(0,t.length);let ok=false;try{ok=document.execCommand('copy')}catch(e){}a.remove();if(ok)toast('Copiato!');else prompt('Copia il codice:',t)}
@@ -114,12 +115,21 @@ function pRender(){const l=document.getElementById('pList');l.innerHTML='';
   li.innerHTML=`<span class="c" style="font-family:system-ui">${new Date(x.t).toLocaleString('it-IT',{dateStyle:'short',timeStyle:'short'})}</span><span class="a">${x.p.toLocaleString('it-IT')}</span>`;
   const b=document.createElement('button');b.className='sec';b.textContent='✕';b.onclick=()=>{if(confirm('Eliminare questa voce?')){pts.splice(i,1);pSave()}};li.append(b);l.append(li)});
  if(!pts.length)l.innerHTML='<li style="color:var(--mut)">Nessuna voce</li>'}
-function pSave(){try{localStorage.setItem(PK,JSON.stringify(pts))}catch(e){}pRender()}
+function pSave(){try{localStorage.setItem(PK,JSON.stringify(pts))}catch(e){}pRender();cloudSave()}
 document.getElementById('pf').onsubmit=e=>{e.preventDefault();const v=parseInt(document.getElementById('pts').value,10);if(isNaN(v))return;pts.unshift({p:v,t:Date.now()});document.getElementById('pts').value='';pSave();toast('Punti salvati')};
 const CK='mw-credito';let cr=null;
 try{cr=JSON.parse(localStorage.getItem(CK))}catch(e){}
 function cRender(){cNow.textContent=cr?fmt(cr.v):'—';cWhen.textContent=cr?'aggiornato '+new Date(cr.t).toLocaleString('it-IT',{dateStyle:'short',timeStyle:'short'}):''}
-document.getElementById('cf').onsubmit=e=>{e.preventDefault();const v=parseFloat(cred.value.replace(',','.'));if(isNaN(v))return;cr={v,t:Date.now()};try{localStorage.setItem(CK,JSON.stringify(cr))}catch(e){}cred.value='';cRender();toast('Credito aggiornato')};
+document.getElementById('cf').onsubmit=e=>{e.preventDefault();const v=parseFloat(cred.value.replace(',','.'));if(isNaN(v))return;cr={v,t:Date.now()};try{localStorage.setItem(CK,JSON.stringify(cr))}catch(e){}cred.value='';cRender();cloudSave();toast('Credito aggiornato')};
+let cloudRef=null,cloudT=null;
+function cloudSave(){if(!cloudRef)return;clearTimeout(cloudT);cloudT=setTimeout(()=>cloudRef.set({buoni:data,punti:pts,credito:cr}).catch(()=>toast('Salvataggio online non riuscito')),400)}
+(async()=>{try{const [db,user]=await Promise.all([claude.use('db'),claude.use('user')]);if(!db||!user)return;const id=await user.id();if(!id)return;
+ const ref=db.collection('data/users/'+id).doc('stato');const s=await ref.get();
+ if(s.exists){const d=s.data();data=d.buoni||[];pts=d.punti||[];cr=d.credito||null;
+  try{localStorage.setItem(K,JSON.stringify(data));localStorage.setItem(PK,JSON.stringify(pts));localStorage.setItem(CK,JSON.stringify(cr))}catch(e){}
+  render();pRender();cRender()}
+ cloudRef=ref;if(!s.exists&&(data.length||pts.length||cr))cloudSave();
+ document.getElementById('sync').textContent='☁️ Salvato nel tuo account'}catch(e){}})();
 cRender();
 pRender();
 render();
