@@ -37,6 +37,8 @@ li button{padding:6px 10px;font-size:.85rem}
  <form id="f">
   <input id="code" placeholder="Codice buono" required autocomplete="off">
   <input id="amount" type="number" step="0.01" min="0" placeholder="Importo" required>
+  <input id="desc" placeholder="Descrizione (facoltativa)" style="flex:1 1 100%">
+  <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="res"> Tieni da parte</label>
   <button>Aggiungi</button>
  </form>
 </div>
@@ -46,11 +48,11 @@ li button{padding:6px 10px;font-size:.85rem}
  <button id="imp" style="margin-top:8px">Importa</button>
 </div>
 <div class="card">
- <div class="tot"><span>Disponibili: <b id="tAv">0</b></span><span>Usati: <b id="tUs">0</b></span></div>
+ <div class="tot"><span>Disponibili: <b id="tAv">0</b></span><span>Da parte: <b id="tRs">0</b></span><span>Usati: <b id="tUs">0</b></span></div>
 </div>
 <div class="card">
  <div class="bar">
-  <select id="flt"><option value="av">Disponibili</option><option value="used">Usati</option><option value="all">Tutti</option></select>
+  <select id="flt"><option value="av">Disponibili</option><option value="res">Da parte</option><option value="used">Usati</option><option value="all">Tutti</option></select>
   <button class="sec" id="copyAll">Copia disponibili</button>
   <button class="sec" id="exp">Esporta</button>
  </div>
@@ -65,26 +67,30 @@ const save=()=>{try{localStorage.setItem(K,JSON.stringify(data))}catch(e){}rende
 const fmt=n=>n.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2});
 const toast=t=>{const e=document.getElementById('toast');e.textContent=t;e.style.opacity=1;setTimeout(()=>e.style.opacity=0,1200)};
 const copy=t=>navigator.clipboard.writeText(t).then(()=>toast('Copiato!'),()=>toast('Copia non riuscita'));
-function add(code,amount){code=code.trim();if(!code||isNaN(amount))return false;
+const st=d=>d.used?'used':d.reserved?'res':'av';
+function add(code,amount,desc='',reserved=false){code=code.trim();if(!code||isNaN(amount))return false;
  if(data.some(d=>d.code===code)){toast('Codice già presente');return false}
- data.unshift({code,amount,used:false,date:Date.now()});return true}
+ data.unshift({code,amount,desc,reserved,used:false,date:Date.now()});return true}
 document.getElementById('f').onsubmit=e=>{e.preventDefault();
- if(add(code.value,parseFloat(amount.value.replace(',','.')))){code.value='';amount.value='';save();code.focus()}};
+ if(add(code.value,parseFloat(amount.value.replace(',','.')),desc.value.trim(),res.checked)){code.value='';amount.value='';desc.value='';res.checked=false;save();code.focus()}};
 document.getElementById('imp').onclick=()=>{let n=0;
  bulk.value.split('\n').forEach(l=>{const m=l.trim().match(/^(\S+)[\s,;:\t-]+[€$]?\s*([\d.,]+)/);if(m&&add(m[1],parseFloat(m[2].replace(',','.'))))n++});
  bulk.value='';save();toast(n+' buoni importati')};
 document.getElementById('flt').onchange=render;
-document.getElementById('copyAll').onclick=()=>copy(data.filter(d=>!d.used).map(d=>d.code).join('\n'));
-document.getElementById('exp').onclick=()=>copy(data.map(d=>d.code+' '+d.amount+(d.used?' (usato)':'')).join('\n'));
+document.getElementById('copyAll').onclick=()=>copy(data.filter(d=>st(d)==='av').map(d=>d.code).join('\n'));
+document.getElementById('exp').onclick=()=>copy(data.map(d=>d.code+' '+d.amount+(d.desc?' '+d.desc:'')+(d.used?' (usato)':d.reserved?' (da parte)':'')).join('\n'));
 function render(){const f=flt.value,ul=document.getElementById('list');ul.innerHTML='';
- tAv.textContent=fmt(data.filter(d=>!d.used).reduce((s,d)=>s+d.amount,0));
- tUs.textContent=fmt(data.filter(d=>d.used).reduce((s,d)=>s+d.amount,0));
- data.filter(d=>f==='all'||(f==='used')===d.used).forEach(d=>{
+ const sum=k=>fmt(data.filter(d=>st(d)===k).reduce((s,d)=>s+d.amount,0));
+ tAv.textContent=sum('av');tRs.textContent=sum('res');
+ tUs.textContent=sum('used');
+ data.filter(d=>f==='all'||st(d)===f).forEach(d=>{
   const li=document.createElement('li');if(d.used)li.className='used';
   li.innerHTML=`<span class="c"></span><span class="a">${fmt(d.amount)}</span>`;
   li.querySelector('.c').textContent=d.code;
+  if(d.desc){const s=document.createElement('small');s.style.cssText='display:block;color:var(--mut);font-family:system-ui';s.textContent=d.desc;li.querySelector('.c').append(s)}
   const b=(t,fn,c)=>{const x=document.createElement('button');x.textContent=t;if(c)x.className=c;x.onclick=fn;li.append(x)};
   b('Copia',()=>copy(d.code));
+  if(!d.used)b(d.reserved?'Sblocca':'Da parte',()=>{d.reserved=!d.reserved;if(d.reserved){const t=prompt('Descrizione',d.desc||'');if(t!==null)d.desc=t.trim()}save()},'sec');
   b(d.used?'Ripristina':'Usato',()=>{d.used=!d.used;save()},'sec');
   b('✕',()=>{if(confirm('Eliminare '+d.code+'?')){data=data.filter(x=>x!==d);save()}},'sec');
   ul.append(li)});
