@@ -46,18 +46,19 @@ li button{padding:6px 10px;font-size:.85rem}
   <button type="button" class="sec" id="pasteBtn">Incolla</button>
   <input id="amount" type="text" inputmode="decimal" placeholder="Importo" autocomplete="off">
   <input id="desc" placeholder="Descrizione (facoltativa)" style="flex:1 1 100%">
-  <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="res"> Tieni da parte</label>
+  <label style="display:flex;align-items:center;gap:6px;white-space:nowrap"><input type="checkbox" id="res"> Da parte</label>
   <button>Aggiungi</button>
+  <button type="button" class="sec" id="multiBtn" style="margin-left:auto;padding:10px 12px">+ Più buoni</button>
  </form>
+ <div id="multi" style="display:none;margin-top:10px">
+  <label for="bulk">Incolla più buoni, uno per riga: <code>CODICE importo</code></label>
+  <textarea id="bulk" placeholder="ABCD-1234 5&#10;EFGH-5678 10"></textarea>
+  <button id="imp" style="margin-top:8px">Importa</button>
+ </div>
 </div>
 <div class="card">
  <div class="tot" style="margin-bottom:8px"><span>Credito disponibile (buoni riscattati): <b id="cNow">—</b></span><span id="cWhen"></span></div>
  <form id="cf"><input id="cred" type="text" inputmode="decimal" placeholder="Credito attuale" required style="flex:1 1 140px"><button>Aggiorna credito</button></form>
-</div>
-<div class="card">
- <label for="bulk">Incolla più buoni (una riga per buono: <code>CODICE importo</code>)</label>
- <textarea id="bulk" placeholder="ABCD-1234 5&#10;EFGH-5678 10"></textarea>
- <button id="imp" style="margin-top:8px">Importa</button>
 </div>
 <div class="card">
  <div class="tot"><span>Disponibili: <b id="tAv">0</b></span><span>Da parte: <b id="tRs">0</b></span><span>Usati: <b id="tUs">0</b></span></div>
@@ -97,9 +98,10 @@ document.getElementById('f').onsubmit=e=>{e.preventDefault();
  if(isNaN(parseFloat(amount.value.replace(',','.')))){toast('Inserisci l\'importo');return}
  if(add(code.value,parseFloat(amount.value.replace(',','.')),desc.value.trim(),res.checked)){code.value='';amount.value='';desc.value='';res.checked=false;save();code.focus()}};
 document.getElementById('pasteBtn').onclick=async()=>{try{const t=await navigator.clipboard.readText();if(t){const m=t.trim().match(/^(\S+)(?:[\s,;:\t-]+[€$]?\s*([\d.,]+))?/);code.value=m?m[1]:t.trim();if(m&&m[2])amount.value=parseFloat(m[2].replace(',','.'));amount.focus()}}catch(e){code.focus();toast('Tieni premuto nel campo e scegli Incolla')}};
+document.getElementById('multiBtn').onclick=()=>{const m=document.getElementById('multi'),o=m.style.display==='none';m.style.display=o?'block':'none';multiBtn.textContent=o?'Chiudi':'+ Più buoni';if(o)bulk.focus()};
 document.getElementById('imp').onclick=()=>{let n=0;
  bulk.value.split('\n').forEach(l=>{const m=l.trim().match(/^(\S+)[\s,;:\t-]+[€$]?\s*([\d.,]+)/);if(m&&add(m[1],parseFloat(m[2].replace(',','.'))))n++});
- bulk.value='';save();toast(n+' buoni importati')};
+ bulk.value='';save();toast(n+' buoni importati');if(n){multi.style.display='none';multiBtn.textContent='+ Più buoni'}};
 document.getElementById('flt').onchange=render;
 document.getElementById('copyAll').onclick=()=>copy(data.filter(d=>st(d)==='av').map(d=>d.code).join('\n'));
 document.getElementById('exp').onclick=()=>copy(data.map(d=>d.code+' '+d.amount+(d.desc?' '+d.desc:'')+(d.used?' (usato)':d.reserved?' (da parte)':'')).join('\n'));
