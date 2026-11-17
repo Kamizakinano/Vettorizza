@@ -36,7 +36,8 @@ li button{padding:6px 10px;font-size:.85rem}
 <p id="sync" style="color:var(--mut);margin:-8px 0 12px;font-size:.9rem">⚠️ Salvataggio solo locale: accedi a claude.ai per salvare nel tuo account</p>
 <div class="card">
  <form id="f">
-  <input id="code" placeholder="Codice buono" required autocomplete="off">
+  <input id="code" placeholder="Codice buono" required autocomplete="off" autocapitalize="characters" spellcheck="false">
+  <button type="button" class="sec" id="pasteBtn">Incolla</button>
   <input id="amount" type="number" step="0.01" min="0" placeholder="Importo" required>
   <input id="desc" placeholder="Descrizione (facoltativa)" style="flex:1 1 100%">
   <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="res"> Tieni da parte</label>
@@ -70,13 +71,21 @@ li button{padding:6px 10px;font-size:.85rem}
 </div>
 </main>
 <div id="toast"></div>
+<div id="cm" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:16px;z-index:9" onclick="if(event.target===this)this.style.display='none'">
+ <div class="card" style="width:100%;max-width:420px">
+  <p style="margin:0 0 8px">Tieni premuto sul testo e scegli <b>Copia</b>:</p>
+  <textarea id="cmT" readonly style="min-height:60px;font-family:ui-monospace,monospace;-webkit-user-select:text;user-select:text"></textarea>
+  <button style="margin-top:8px;width:100%" onclick="document.getElementById('cm').style.display='none'">Chiudi</button>
+ </div>
+</div>
 <script>
 const K='mw-buoni';let data=[];
 try{data=JSON.parse(localStorage.getItem(K))||[]}catch(e){}
 const save=()=>{try{localStorage.setItem(K,JSON.stringify(data))}catch(e){}render();cloudSave()};
 const fmt=n=>n.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2});
 const toast=t=>{const e=document.getElementById('toast');e.textContent=t;e.style.opacity=1;setTimeout(()=>e.style.opacity=0,1200)};
-function copyFallback(t){const a=document.createElement('textarea');a.value=t;a.setAttribute('readonly','');a.style.cssText='position:fixed;top:0;left:0;opacity:0;font-size:16px';document.body.append(a);a.focus();a.select();a.setSelectionRange(0,t.length);let ok=false;try{ok=document.execCommand('copy')}catch(e){}a.remove();if(ok)toast('Copiato!');else prompt('Copia il codice:',t)}
+function copyFallback(t){const a=document.createElement('textarea');a.value=t;a.setAttribute('readonly','');a.style.cssText='position:fixed;top:0;left:0;opacity:0;font-size:16px';document.body.append(a);a.focus();a.select();a.setSelectionRange(0,t.length);let ok=false;try{ok=document.execCommand('copy')}catch(e){}a.remove();if(ok)toast('Copiato!');else showCopy(t)}
+function showCopy(t){const m=document.getElementById('cm'),i=document.getElementById('cmT');i.value=t;m.style.display='flex';i.focus();i.select();i.setSelectionRange(0,t.length)}
 const copy=t=>{if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(t).then(()=>toast('Copiato!'),()=>copyFallback(t));else copyFallback(t)};
 const st=d=>d.used?'used':d.reserved?'res':'av';
 function add(code,amount,desc='',reserved=false){code=code.trim();if(!code||isNaN(amount))return false;
@@ -84,6 +93,7 @@ function add(code,amount,desc='',reserved=false){code=code.trim();if(!code||isNa
  data.unshift({code,amount,desc,reserved,used:false,date:Date.now()});return true}
 document.getElementById('f').onsubmit=e=>{e.preventDefault();
  if(add(code.value,parseFloat(amount.value.replace(',','.')),desc.value.trim(),res.checked)){code.value='';amount.value='';desc.value='';res.checked=false;save();code.focus()}};
+document.getElementById('pasteBtn').onclick=async()=>{try{const t=await navigator.clipboard.readText();if(t){const m=t.trim().match(/^(\S+)(?:[\s,;:\t-]+[€$]?\s*([\d.,]+))?/);code.value=m?m[1]:t.trim();if(m&&m[2])amount.value=parseFloat(m[2].replace(',','.'));amount.focus()}}catch(e){code.focus();toast('Tieni premuto nel campo e scegli Incolla')}};
 document.getElementById('imp').onclick=()=>{let n=0;
  bulk.value.split('\n').forEach(l=>{const m=l.trim().match(/^(\S+)[\s,;:\t-]+[€$]?\s*([\d.,]+)/);if(m&&add(m[1],parseFloat(m[2].replace(',','.'))))n++});
  bulk.value='';save();toast(n+' buoni importati')};
