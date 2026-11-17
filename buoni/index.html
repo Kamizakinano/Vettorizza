@@ -28,12 +28,18 @@ li.used .c{text-decoration:line-through;color:var(--mut)}
 li .a{font-weight:600;white-space:nowrap;margin-left:auto;font-size:1.1rem}
 li button{padding:6px 10px;font-size:.85rem}
 .bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.pills{display:flex;gap:6px;margin-bottom:12px}.pills div{flex:1;border-radius:8px;padding:5px 8px;line-height:1.2}.pills span{display:block;font-size:.7rem;color:#6b7280}.pills b{font-size:.95rem}
 #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 14px;border-radius:8px;opacity:0;transition:.2s}
 </style>
 </head>
 <body><main>
 <h1>Buoni MakerWorld</h1>
 <p id="sync" style="color:var(--mut);margin:-8px 0 12px;font-size:.9rem"></p>
+<div class="pills">
+ <div style="background:#e6f7ec"><span>Credito</span><b id="cNow" style="color:#00ae42">0,00</b></div>
+ <div style="background:#eef0f3"><span>Da attivare</span><b id="tAv" style="color:#1d2330">0,00</b></div>
+ <div style="background:#fff3e0"><span>Da parte</span><b id="tRs" style="color:#e08a00">0,00</b></div>
+</div>
 <div class="card">
  <div class="tot" style="margin-bottom:8px"><span>Punti attuali: <b id="pNow">—</b></span><span id="pDiff"></span></div>
  <div id="pGoal" style="margin-bottom:10px"></div>
@@ -57,16 +63,9 @@ li button{padding:6px 10px;font-size:.85rem}
  </div>
 </div>
 <div class="card">
- <div class="tot" style="margin-bottom:8px"><span>Credito disponibile (buoni riscattati): <b id="cNow">—</b></span><span id="cWhen"></span></div>
- <form id="cf"><input id="cred" type="text" inputmode="decimal" placeholder="Credito attuale" required style="flex:1 1 140px"><button>Aggiorna credito</button></form>
-</div>
-<div class="card">
- <div class="tot"><span>Disponibili: <b id="tAv">0</b></span><span>Da parte: <b id="tRs">0</b></span><span>Usati: <b id="tUs">0</b></span></div>
-</div>
-<div class="card">
  <div class="bar">
-  <select id="flt"><option value="av">Disponibili</option><option value="res">Da parte</option><option value="used">Usati</option><option value="all">Tutti</option></select>
-  <button class="sec" id="copyAll">Copia disponibili</button>
+  <select id="flt"><option value="av">Da attivare</option><option value="res">Da parte</option><option value="used">Riscattati</option><option value="all">Tutti</option></select>
+  <button class="sec" id="copyAll">Copia da attivare</button>
   <button class="sec" id="exp">Esporta</button>
  </div>
  <ul id="list"></ul>
@@ -81,7 +80,7 @@ li button{padding:6px 10px;font-size:.85rem}
  </div>
 </div>
 <script>
-const K='mw-buoni';let data=[];
+const K='mw-buoni',CK='mw-credito';let data=[];
 try{data=JSON.parse(localStorage.getItem(K))||[]}catch(e){}
 const save=()=>{try{localStorage.setItem(K,JSON.stringify(data))}catch(e){}render();cloudSave()};
 const fmt=n=>n.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -104,11 +103,10 @@ document.getElementById('imp').onclick=()=>{let n=0;
  bulk.value='';save();toast(n+' buoni importati');if(n){multi.style.display='none';multiBtn.textContent='+ Più buoni'}};
 document.getElementById('flt').onchange=render;
 document.getElementById('copyAll').onclick=()=>copy(data.filter(d=>st(d)==='av').map(d=>d.code).join('\n'));
-document.getElementById('exp').onclick=()=>copy(data.map(d=>d.code+' '+d.amount+(d.desc?' '+d.desc:'')+(d.used?' (usato)':d.reserved?' (da parte)':'')).join('\n'));
+document.getElementById('exp').onclick=()=>copy(data.map(d=>d.code+' '+d.amount+(d.desc?' '+d.desc:'')+(d.used?' (riscattato)':d.reserved?' (da parte)':'')).join('\n'));
 function render(){const f=flt.value,ul=document.getElementById('list');ul.innerHTML='';
  const sum=k=>fmt(data.filter(d=>st(d)===k).reduce((s,d)=>s+d.amount,0));
  tAv.textContent=sum('av');tRs.textContent=sum('res');
- tUs.textContent=sum('used');
  data.filter(d=>f==='all'||st(d)===f).forEach(d=>{
   const li=document.createElement('li');if(d.used)li.className='used';
   li.innerHTML=`<span class="c"></span><span class="a">${fmt(d.amount)}</span>`;
@@ -117,7 +115,7 @@ function render(){const f=flt.value,ul=document.getElementById('list');ul.innerH
   const b=(t,fn,c)=>{const x=document.createElement('button');x.textContent=t;if(c)x.className=c;x.onclick=fn;li.append(x)};
   b('Copia',()=>copy(d.code));
   if(!d.used)b(d.reserved?'Sblocca':'Da parte',()=>{d.reserved=!d.reserved;if(d.reserved){const t=prompt('Descrizione',d.desc||'');if(t!==null)d.desc=t.trim()}save()},'sec');
-  b(d.used?'Ripristina':'Usato',()=>{d.used=!d.used;save()},'sec');
+  b(d.used?'Annulla':'Riscatta',()=>{d.used=!d.used;cr={v:Math.round(((cr?cr.v:0)+(d.used?d.amount:-d.amount))*100)/100,t:Date.now()};try{localStorage.setItem(CK,JSON.stringify(cr))}catch(e){}cRender();save();toast(d.used?'Riscattato: +'+fmt(d.amount)+' al credito':'Riscatto annullato')},'sec');
   b('✕',()=>{if(confirm('Eliminare '+d.code+'?')){data=data.filter(x=>x!==d);save()}},'sec');
   ul.append(li)});
  if(!ul.children.length)ul.innerHTML='<li style="color:var(--mut)">Nessun buono</li>'}
@@ -136,10 +134,9 @@ function pRender(){const l=document.getElementById('pList');l.innerHTML='';
  if(!pts.length)l.innerHTML='<li style="color:var(--mut)">Nessuna voce</li>'}
 function pSave(){try{localStorage.setItem(PK,JSON.stringify(pts))}catch(e){}pRender();cloudSave()}
 document.getElementById('pf').onsubmit=e=>{e.preventDefault();const v=parseInt(document.getElementById('pts').value,10);if(isNaN(v))return;pts.unshift({p:v,t:Date.now()});document.getElementById('pts').value='';pSave();toast('Punti salvati')};
-const CK='mw-credito';let cr=null;
+let cr=null;
 try{cr=JSON.parse(localStorage.getItem(CK))}catch(e){}
-function cRender(){cNow.textContent=cr?fmt(cr.v):'—';cWhen.textContent=cr?'aggiornato '+new Date(cr.t).toLocaleString('it-IT',{dateStyle:'short',timeStyle:'short'}):''}
-document.getElementById('cf').onsubmit=e=>{e.preventDefault();const v=parseFloat(cred.value.replace(',','.'));if(isNaN(v))return;cr={v,t:Date.now()};try{localStorage.setItem(CK,JSON.stringify(cr))}catch(e){}cred.value='';cRender();cloudSave();toast('Credito aggiornato')};
+function cRender(){cNow.textContent=fmt(cr?cr.v:0)}
 let cloudRef=null,cloudT=null;
 function cloudSave(){if(!cloudRef)return;clearTimeout(cloudT);cloudT=setTimeout(()=>cloudRef.set({buoni:data,punti:pts,credito:cr}).catch(()=>toast('Salvataggio online non riuscito')),400)}
 (async()=>{try{const [db,user]=await Promise.all([claude.use('db'),claude.use('user')]);if(!db||!user)return;const id=await user.id();if(!id)return;
