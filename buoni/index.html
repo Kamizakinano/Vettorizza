@@ -33,7 +33,13 @@ li button{padding:6px 10px;font-size:.85rem}
 </head>
 <body><main>
 <h1>Buoni MakerWorld</h1>
-<p id="sync" style="color:var(--mut);margin:-8px 0 12px;font-size:.9rem">⚠️ Salvataggio solo locale: accedi a claude.ai per salvare nel tuo account</p>
+<p id="sync" style="color:var(--mut);margin:-8px 0 12px;font-size:.9rem"></p>
+<div class="card">
+ <div class="tot" style="margin-bottom:8px"><span>Punti attuali: <b id="pNow">—</b></span><span id="pDiff"></span></div>
+ <div id="pGoal" style="margin-bottom:10px"></div>
+ <form id="pf"><input id="pts" type="number" step="1" min="0" placeholder="Punti adesso" required style="flex:1 1 140px"><button>Salva punti</button></form>
+ <details open style="margin-top:8px"><summary>Storico punti</summary><ul id="pList"></ul></details>
+</div>
 <div class="card">
  <form id="f">
   <input id="code" placeholder="Codice buono" autocomplete="off" autocapitalize="characters" spellcheck="false">
@@ -47,12 +53,6 @@ li button{padding:6px 10px;font-size:.85rem}
 <div class="card">
  <div class="tot" style="margin-bottom:8px"><span>Credito disponibile (buoni riscattati): <b id="cNow">—</b></span><span id="cWhen"></span></div>
  <form id="cf"><input id="cred" type="text" inputmode="decimal" placeholder="Credito attuale" required style="flex:1 1 140px"><button>Aggiorna credito</button></form>
-</div>
-<div class="card">
- <div class="tot" style="margin-bottom:8px"><span>Punti attuali: <b id="pNow">—</b></span><span id="pDiff"></span></div>
- <div id="pGoal" style="margin-bottom:10px"></div>
- <form id="pf"><input id="pts" type="number" step="1" min="0" placeholder="Punti adesso" required style="flex:1 1 140px"><button>Salva punti</button></form>
- <details open style="margin-top:8px"><summary>Storico punti</summary><ul id="pList"></ul></details>
 </div>
 <div class="card">
  <label for="bulk">Incolla più buoni (una riga per buono: <code>CODICE importo</code>)</label>
