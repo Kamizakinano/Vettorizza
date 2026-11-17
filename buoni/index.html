@@ -21,11 +21,11 @@ textarea{width:100%;min-height:90px}
 .tot{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut)}
 .tot b{color:var(--fg);font-size:1.2rem}
 ul{list-style:none;padding:0;margin:0}
-li{display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--bd)}
+li{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 0;border-top:1px solid var(--bd)}
 li:first-child{border-top:0}
-li .c{flex:1;-webkit-user-select:text;user-select:text;font-family:ui-monospace,monospace;word-break:break-all}
+li .c{flex:1 1 calc(100% - 110px);min-width:0;-webkit-user-select:text;user-select:text;font-family:ui-monospace,monospace;font-size:1.05rem;letter-spacing:.03em;overflow-wrap:anywhere}
 li.used .c{text-decoration:line-through;color:var(--mut)}
-li .a{font-weight:600;white-space:nowrap}
+li .a{font-weight:600;white-space:nowrap;margin-left:auto;font-size:1.1rem}
 li button{padding:6px 10px;font-size:.85rem}
 .bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 14px;border-radius:8px;opacity:0;transition:.2s}
