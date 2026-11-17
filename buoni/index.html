@@ -43,6 +43,11 @@ li button{padding:6px 10px;font-size:.85rem}
  </form>
 </div>
 <div class="card">
+ <div class="tot" style="margin-bottom:8px"><span>Punti attuali: <b id="pNow">—</b></span><span id="pDiff"></span></div>
+ <form id="pf"><input id="pts" type="number" step="1" min="0" placeholder="Punti adesso" required style="flex:1 1 140px"><button>Salva punti</button></form>
+ <details style="margin-top:8px"><summary>Storico punti</summary><ul id="pList"></ul></details>
+</div>
+<div class="card">
  <label for="bulk">Incolla più buoni (una riga per buono: <code>CODICE importo</code>)</label>
  <textarea id="bulk" placeholder="ABCD-1234 5&#10;EFGH-5678 10"></textarea>
  <button id="imp" style="margin-top:8px">Importa</button>
@@ -95,6 +100,18 @@ function render(){const f=flt.value,ul=document.getElementById('list');ul.innerH
   b('✕',()=>{if(confirm('Eliminare '+d.code+'?')){data=data.filter(x=>x!==d);save()}},'sec');
   ul.append(li)});
  if(!ul.children.length)ul.innerHTML='<li style="color:var(--mut)">Nessun buono</li>'}
+const PK='mw-punti';let pts=[];
+try{pts=JSON.parse(localStorage.getItem(PK))||[]}catch(e){}
+function pRender(){const l=document.getElementById('pList');l.innerHTML='';
+ pNow.textContent=pts.length?pts[0].p.toLocaleString('it-IT'):'—';
+ pDiff.textContent=pts.length>1?((pts[0].p-pts[1].p>=0?'+':'')+(pts[0].p-pts[1].p).toLocaleString('it-IT')+' dall\'ultima volta'):'';
+ pts.forEach((x,i)=>{const li=document.createElement('li');
+  li.innerHTML=`<span class="c" style="font-family:system-ui">${new Date(x.t).toLocaleString('it-IT',{dateStyle:'short',timeStyle:'short'})}</span><span class="a">${x.p.toLocaleString('it-IT')}</span>`;
+  const b=document.createElement('button');b.className='sec';b.textContent='✕';b.onclick=()=>{if(confirm('Eliminare questa voce?')){pts.splice(i,1);pSave()}};li.append(b);l.append(li)});
+ if(!pts.length)l.innerHTML='<li style="color:var(--mut)">Nessuna voce</li>'}
+function pSave(){try{localStorage.setItem(PK,JSON.stringify(pts))}catch(e){}pRender()}
+document.getElementById('pf').onsubmit=e=>{e.preventDefault();const v=parseInt(document.getElementById('pts').value,10);if(isNaN(v))return;pts.unshift({p:v,t:Date.now()});document.getElementById('pts').value='';pSave();toast('Punti salvati')};
+pRender();
 render();
 </script>
 </body></html>
