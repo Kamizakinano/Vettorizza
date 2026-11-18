@@ -119,7 +119,7 @@ function render(){const f=flt.value,ul=document.getElementById('list');ul.innerH
   b('✕',()=>{if(confirm('Eliminare '+d.code+'?')){data=data.filter(x=>x!==d);save()}},'sec');
   ul.append(li)});
  if(!ul.children.length)ul.innerHTML='<li style="color:var(--mut)">Nessun buono</li>'}
-const R2=n=>Math.round(n*100)/100,nf=n=>R2(n).toLocaleString('it-IT',{maximumFractionDigits:2}),num=t=>{t=String(t).trim().replace(/\s/g,'');if(t.includes(','))t=t.replace(/\./g,'').replace(',','.');return parseFloat(t)};
+const R2=n=>Math.round(n*1e6)/1e6,nf=n=>R2(n).toLocaleString('it-IT',{maximumFractionDigits:6}),num=t=>{t=String(t).trim().replace(/\s/g,'');if(t.includes(','))t=t.replace(/\./g,'').replace(',','.');return parseFloat(t)};
 const PK='mw-punti';let pts=[];
 try{pts=JSON.parse(localStorage.getItem(PK))||[]}catch(e){}
 function pRender(){const l=document.getElementById('pList');l.innerHTML='';
