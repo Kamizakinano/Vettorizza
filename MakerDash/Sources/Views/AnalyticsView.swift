@@ -37,16 +37,18 @@ struct AnalyticsView: View {
     }
 
     /// Barre del grafico: gli ultimi N periodi fino a quello selezionato compreso.
-    private var bars: [(off: Int, start: Date, value: Int)] {
+    struct Bar: Identifiable { let off: Int; let start: Date; let value: Int; var id: Int { off } }
+
+    /// Barre del grafico: una finestra di periodi che contiene quello selezionato.
+    private var bars: [Bar] {
         let n = mode == .giorno ? 14 : mode == .settimana ? 12 : mode == .mese ? 12 : 5
-        let base = max(offset, 0)
-        return (0..<n).reversed().map { i in
-            let o = base + i - (base > 0 ? n / 2 : 0)
-            let off = max(o, 0)
+        let newest = max(0, offset - n / 2)
+        var out: [Bar] = []
+        for off in newest..<(newest + n) {
             let iv = interval(off)
-            return (off, iv.start, store.sum(metrics[metric].1, in: iv))
-        }.reduce(into: [(off: Int, start: Date, value: Int)]()) { r, x in if !r.contains(where: { $0.off == x.off }) { r.append(x) } }
-         .sorted { $0.start < $1.start }
+            out.append(Bar(off: off, start: iv.start, value: store.sum(metrics[metric].1, in: iv)))
+        }
+        return out.sorted { $0.start < $1.start }
     }
 
     var body: some View {
@@ -87,7 +89,7 @@ struct AnalyticsView: View {
                         }
                     }
 
-                    Chart(bars, id: \.off) { b in
+                    Chart(bars) { b in
                         BarMark(x: .value("Periodo", b.start, unit: comp), y: .value(metrics[metric].0, b.value))
                             .foregroundStyle(b.off == offset ? metrics[metric].2 : metrics[metric].2.opacity(0.3))
                     }
