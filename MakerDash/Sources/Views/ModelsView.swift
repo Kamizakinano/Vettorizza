@@ -19,8 +19,7 @@ struct ModelsView: View {
                 AccountPicker().listRowBackground(Color.clear)
                 ForEach(sorted) { m in
                 HStack(spacing: 12) {
-                    AsyncImage(url: m.coverUrl.flatMap(URL.init(string:))) { $0.resizable().scaledToFill() }
-                        placeholder: { Color.gray.opacity(0.2) }
+                    RemoteImage(url: m.coverUrl.flatMap(URL.init(string:)))
                         .frame(width: 72, height: 72).clipShape(RoundedRectangle(cornerRadius: 10))
                     VStack(alignment: .leading, spacing: 4) {
                         Text(m.titleTranslated?.isEmpty == false ? m.titleTranslated! : m.title)

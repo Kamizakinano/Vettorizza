@@ -147,8 +147,7 @@ struct AnalyticsView: View {
             }
             ForEach(list) { d in
                 HStack(spacing: 10) {
-                    AsyncImage(url: d.cover.flatMap(URL.init(string:))) { $0.resizable().scaledToFill() }
-                        placeholder: { Color.gray.opacity(0.2) }
+                    RemoteImage(url: d.cover.flatMap(URL.init(string:)))
                         .frame(width: 54, height: 54).clipShape(RoundedRectangle(cornerRadius: 8))
                     VStack(alignment: .leading, spacing: 4) {
                         Text(d.title).font(.subheadline.bold()).lineLimit(1)
