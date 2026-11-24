@@ -14,10 +14,13 @@ targets:
         CFBundleDisplayName: MakerDash
         UILaunchScreen: {}
         UIUserInterfaceStyle: Dark
+        UIBackgroundModes: [fetch]
+        BGTaskSchedulerPermittedIdentifiers: [com.personal.makerdash.refresh]
+        MARKETING_VERSION_DISPLAY: "0.2"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.personal.makerdash
-        MARKETING_VERSION: "0.1.0"
+        MARKETING_VERSION: "0.2.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.9"
         CODE_SIGNING_ALLOWED: "NO"

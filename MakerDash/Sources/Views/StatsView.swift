@@ -7,6 +7,7 @@ struct StatsView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
+                AccountPicker()
                 if let err = store.error { Text(err).foregroundStyle(.red).padding(.horizontal) }
                 if let s = store.stats {
                     pointsCard(s)
@@ -69,6 +70,13 @@ struct StatsView: View {
                 Text("Today:").font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Text(d >= 0 ? "+\(d)" : "\(d)").font(.caption.bold()).foregroundStyle(d >= 0 ? .green : .red)
+            }
+            Sparkline(points: store.dailyGains(kp, days: 7), color: color)
+        }
+        .overlay(alignment: .topTrailing) {
+            if let c = store.weekChange(kp) {
+                Text("\(c >= 0 ? "+" : "")\(Int(c))%").font(.caption2.bold())
+                    .foregroundStyle(c >= 0 ? .green : .red).padding(8)
             }
         }
         .padding()

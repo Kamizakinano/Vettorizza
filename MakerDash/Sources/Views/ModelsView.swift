@@ -15,7 +15,9 @@ struct ModelsView: View {
 
     var body: some View {
         NavigationStack {
-            List(sorted) { m in
+            List {
+                AccountPicker().listRowBackground(Color.clear)
+                ForEach(sorted) { m in
                 HStack(spacing: 12) {
                     AsyncImage(url: m.coverUrl.flatMap(URL.init(string:))) { $0.resizable().scaledToFill() }
                         placeholder: { Color.gray.opacity(0.2) }
@@ -34,6 +36,7 @@ struct ModelsView: View {
                             stat("printer", m.printCount, store.delta(design: m, \.printCount))
                         }
                     }
+                }
                 }
             }
             .overlay { if store.designs.isEmpty { ContentUnavailableView("Nessun modello", systemImage: "cube") } }
