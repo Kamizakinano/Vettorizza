@@ -45,7 +45,7 @@ struct SessionUser: Decodable {
 
 struct RecentDesigns: Decodable { let total: Int; let hits: [Design] }
 
-struct Design: Decodable, Identifiable, Codable {
+struct Design: Identifiable, Codable {
     let id: Int
     let title: String
     let titleTranslated: String?
