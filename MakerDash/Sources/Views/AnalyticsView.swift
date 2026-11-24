@@ -3,44 +3,118 @@ import Charts
 
 struct AnalyticsView: View {
     @EnvironmentObject var store: StatsStore
-    @State private var range = 7
+    @State private var mode: StatsStore.Grouping = .giorno
+    @State private var offset = 0          // 0 = periodo attuale, 1 = precedente, ...
     @State private var metric = 0
-    @State private var selected: Date?
-    @State private var grouping: StatsStore.Grouping = .giorno
 
     private let metrics: [(String, KeyPath<ProfileStats, Int>, Color)] = [
         ("Downloads", \.downloads, .green), ("Prints", \.prints, .gray), ("Likes", \.likes, .pink),
         ("Followers", \.followers, .cyan), ("Boosts", \.boosts, .yellow), ("Collections", \.collections, .purple)
     ]
+    private let cal = Calendar.current
+
+    private var comp: Calendar.Component {
+        switch mode { case .giorno: .day; case .settimana: .weekOfYear; case .mese: .month; case .anno: .year }
+    }
+    private func interval(_ off: Int) -> DateInterval {
+        let ref = cal.date(byAdding: comp, value: -off, to: Date())!
+        return cal.dateInterval(of: comp, for: ref)!
+    }
+    private var current: DateInterval { interval(offset) }
+
+    private var title: String {
+        let d = current.start
+        switch mode {
+        case .giorno: return offset == 0 ? "Oggi" : offset == 1 ? "Ieri" : d.formatted(.dateTime.weekday(.wide).day().month(.wide))
+        case .settimana:
+            if offset == 0 { return "Questa settimana" }
+            if offset == 1 { return "Settimana scorsa" }
+            let end = cal.date(byAdding: .day, value: -1, to: current.end)!
+            return "\(d.formatted(.dateTime.day().month())) – \(end.formatted(.dateTime.day().month()))"
+        case .mese: return offset == 0 ? "Questo mese" : d.formatted(.dateTime.month(.wide).year())
+        case .anno: return offset == 0 ? "Quest'anno" : d.formatted(.dateTime.year())
+        }
+    }
+
+    /// Barre del grafico: gli ultimi N periodi fino a quello selezionato compreso.
+    private var bars: [(off: Int, start: Date, value: Int)] {
+        let n = mode == .giorno ? 14 : mode == .settimana ? 12 : mode == .mese ? 12 : 5
+        let base = max(offset, 0)
+        return (0..<n).reversed().map { i in
+            let o = base + i - (base > 0 ? n / 2 : 0)
+            let off = max(o, 0)
+            let iv = interval(off)
+            return (off, iv.start, store.sum(metrics[metric].1, in: iv))
+        }.reduce(into: [(off: Int, start: Date, value: Int)]()) { r, x in if !r.contains(where: { $0.off == x.off }) { r.append(x) } }
+         .sorted { $0.start < $1.start }
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 AccountPicker()
-                VStack(alignment: .leading, spacing: 12) {
-                    Picker("Periodo", selection: $range) {
-                        Text("7G").tag(7); Text("30G").tag(30); Text("180G").tag(180); Text("1A").tag(365)
-                    }.pickerStyle(.segmented)
-                    Picker("Raggruppa", selection: $grouping) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Picker("Periodo", selection: $mode) {
                         ForEach(StatsStore.Grouping.allCases, id: \.self) { Text($0.rawValue) }
-                    }.pickerStyle(.segmented)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack {
-                            ForEach(metrics.indices, id: \.self) { i in
-                                Button(metrics[i].0) { metric = i; selected = nil }
-                                    .font(.caption.bold()).padding(.horizontal, 10).padding(.vertical, 5)
-                                    .background(Capsule().fill(metric == i ? metrics[i].2.opacity(0.3) : Color(white: 0.15)))
-                                    .foregroundStyle(metric == i ? metrics[i].2 : .secondary)
-                            }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: mode) { _, _ in offset = 0 }
+
+                    HStack {
+                        Button { offset += 1 } label: { Image(systemName: "chevron.left").font(.title3.bold()) }
+                        Spacer()
+                        VStack(spacing: 2) {
+                            Text(title).font(.headline)
+                            if offset > 0 { Button("Torna a oggi") { offset = 0 }.font(.caption) }
+                        }
+                        Spacer()
+                        Button { offset -= 1 } label: { Image(systemName: "chevron.right").font(.title3.bold()) }
+                            .disabled(offset == 0)
+                    }
+
+                    LazyVGrid(columns: [GridItem(), GridItem(), GridItem()], spacing: 10) {
+                        ForEach(metrics.indices, id: \.self) { i in
+                            let v = store.sum(metrics[i].1, in: current)
+                            Button { metric = i } label: {
+                                VStack(spacing: 2) {
+                                    Text("+\(v)").font(.headline.monospacedDigit()).foregroundStyle(metrics[i].2)
+                                    Text(metrics[i].0).font(.caption2).foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity).padding(.vertical, 8)
+                                .background(RoundedRectangle(cornerRadius: 10)
+                                    .fill(metric == i ? metrics[i].2.opacity(0.22) : Color(white: 0.15)))
+                            }.buttonStyle(.plain)
                         }
                     }
-                    chart
+
+                    Chart(bars, id: \.off) { b in
+                        BarMark(x: .value("Periodo", b.start, unit: comp), y: .value(metrics[metric].0, b.value))
+                            .foregroundStyle(b.off == offset ? metrics[metric].2 : metrics[metric].2.opacity(0.3))
+                    }
+                    .chartOverlay { proxy in
+                        GeometryReader { g in
+                            Rectangle().fill(.clear).contentShape(Rectangle())
+                                .onTapGesture { loc in
+                                    if let d: Date = proxy.value(atX: loc.x - g[proxy.plotFrame!].origin.x),
+                                       let b = bars.min(by: { abs($0.start.timeIntervalSince(d)) < abs($1.start.timeIntervalSince(d)) }) {
+                                        offset = b.off
+                                    }
+                                }
+                        }
+                    }
+                    .frame(height: 170)
+                    Text("Tocca una barra o usa le frecce per cambiare periodo.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                    if let first = store.firstRecordedDay {
+                        Text("Dati registrati dal \(first.formatted(date: .abbreviated, time: .omitted)): i giorni precedenti risultano a zero.")
+                            .font(.caption2).foregroundStyle(.orange)
+                    }
                 }
                 .padding()
                 .background(RoundedRectangle(cornerRadius: 16).fill(Color(white: 0.1)))
                 .padding(.horizontal)
 
-                dayDetail
+                modelsSection
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Insight").font(.title3.bold())
@@ -62,16 +136,12 @@ struct AnalyticsView: View {
         }
     }
 
-    @ViewBuilder private var dayDetail: some View {
-        let day = grouping == .giorno ? (selected ?? Date()) : Date()
-        let list = store.designs(on: day)
+    @ViewBuilder private var modelsSection: some View {
+        let list = store.designs(in: current)
         VStack(alignment: .leading, spacing: 10) {
-            Text(Calendar.current.isDateInToday(day) ? "Modelli attivi oggi" : "Modelli attivi il \(day.formatted(date: .abbreviated, time: .omitted))")
-                .font(.title3.bold())
-            Text(grouping == .giorno ? "Tocca una barra del grafico per vedere un altro giorno." : "Seleziona \"Giorno\" per scegliere la data dal grafico.")
-                .font(.caption).foregroundStyle(.secondary)
+            Text("Modelli attivi · \(title.lowercased())").font(.title3.bold())
             if list.isEmpty {
-                Text("Nessuna attività registrata per questo giorno.").font(.caption).foregroundStyle(.secondary)
+                Text("Nessuna attività registrata in questo periodo.").font(.caption).foregroundStyle(.secondary)
             }
             ForEach(list) { d in
                 HStack(spacing: 10) {
@@ -99,46 +169,8 @@ struct AnalyticsView: View {
     private func gainView(_ icon: String, _ g: Int, _ tot: Int, _ c: Color) -> some View {
         VStack(spacing: 1) {
             Image(systemName: icon).font(.caption2).foregroundStyle(c)
-            Text(g > 0 ? "+\(g)" : "\(g)").font(.caption.bold().monospacedDigit())
-                .foregroundStyle(g > 0 ? c : .secondary)
+            Text(g > 0 ? "+\(g)" : "\(g)").font(.caption.bold().monospacedDigit()).foregroundStyle(g > 0 ? c : .secondary)
             Text("\(tot)").font(.system(size: 9).monospacedDigit()).foregroundStyle(.secondary)
-        }
-    }
-
-    private func label(_ d: Date) -> String {
-        switch grouping {
-        case .giorno: d.formatted(date: .abbreviated, time: .omitted)
-        case .settimana: "Settimana del " + d.formatted(.dateTime.day().month())
-        case .mese: d.formatted(.dateTime.month(.wide).year())
-        case .anno: d.formatted(.dateTime.year())
-        }
-    }
-
-    @ViewBuilder private var chart: some View {
-        let m = metrics[metric]
-        let pts = store.grouped(m.1, days: range, by: grouping)
-        let total = pts.map(\.value).reduce(0, +)
-        let comp: Calendar.Component = grouping == .giorno ? .day : grouping == .settimana ? .weekOfYear : grouping == .mese ? .month : .year
-        let sel = pts.first { selected != nil && Calendar.current.isDate($0.date, equalTo: selected!, toGranularity: comp) }
-        VStack(alignment: .leading, spacing: 4) {
-            if let sel {
-                Text("\(label(sel.date)): +\(sel.value) \(m.0.lowercased())")
-                    .font(.headline)
-            } else {
-                Text("+\(total) \(m.0.lowercased())").font(.headline)
-                Text("negli ultimi \(range) giorni").font(.caption).foregroundStyle(.secondary)
-            }
-            if pts.isEmpty {
-                Text("Nessuno storico ancora: i dati si accumulano ogni giorno che apri l'app.")
-                    .font(.caption).foregroundStyle(.secondary).frame(height: 180)
-            } else {
-                Chart(pts) { p in
-                    BarMark(x: .value("Periodo", p.date, unit: comp), y: .value(m.0, p.value))
-                        .foregroundStyle(sel == nil || sel?.date == p.date ? m.2 : m.2.opacity(0.3))
-                }
-                .chartXSelection(value: $selected)
-                .frame(height: 200)
-            }
         }
     }
 }

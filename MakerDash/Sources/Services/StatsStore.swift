@@ -133,6 +133,38 @@ final class StatsStore: ObservableObject {
         }.sorted { ($0.gain.downloads, $0.gain.prints) > ($1.gain.downloads, $1.gain.prints) }
     }
 
+    /// Modelli attivi in un intervallo (somma dei giorni).
+    func designs(in interval: DateInterval) -> [DesignDay] {
+        let cal = Calendar.current
+        var d = cal.startOfDay(for: interval.start)
+        var acc: [Int: DesignDay] = [:]
+        while d < interval.end && d <= Date() {
+            for x in designs(on: d) {
+                if let o = acc[x.id] {
+                    acc[x.id] = DesignDay(id: x.id, title: x.title, cover: x.cover,
+                                          gain: DesignCounts(downloads: o.gain.downloads + x.gain.downloads, prints: o.gain.prints + x.gain.prints,
+                                                             likes: o.gain.likes + x.gain.likes, collections: o.gain.collections + x.gain.collections,
+                                                             comments: o.gain.comments + x.gain.comments, boosts: o.gain.boosts + x.gain.boosts),
+                                          total: x.total)
+                } else { acc[x.id] = x }
+            }
+            d = cal.date(byAdding: .day, value: 1, to: d)!
+        }
+        return acc.values.sorted { ($0.gain.downloads, $0.gain.prints) > ($1.gain.downloads, $1.gain.prints) }
+    }
+
+    /// Somma degli incrementi di una metrica in un intervallo.
+    func sum(_ kp: KeyPath<ProfileStats, Int>, in interval: DateInterval) -> Int {
+        dailyGains(kp, days: 800).filter { interval.contains($0.date) }.map(\.value).reduce(0, +)
+    }
+
+    /// Primo giorno con dati registrati.
+    var firstRecordedDay: Date? {
+        current.history.keys.min().flatMap { k -> Date? in
+            let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f.date(from: k)
+        }
+    }
+
     enum Grouping: String, CaseIterable { case giorno = "Giorno", settimana = "Settimana", mese = "Mese", anno = "Anno" }
 
     /// Somma degli incrementi raggruppati per giorno/settimana/mese/anno.
