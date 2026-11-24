@@ -19,11 +19,15 @@ final class MakerWorldFetcher: NSObject, WKNavigationDelegate {
 
     func fetchProfile(handle: String) async throws -> PageProps {
         let h = handle.hasPrefix("@") ? String(handle.dropFirst()) : handle
-        let url = URL(string: "https://makerworld.com/it/@\(h)")!
+        let ts = Int(Date().timeIntervalSince1970)
+        let url = URL(string: "https://makerworld.com/it/@\(h)?_t=\(ts)")!
         return try await withCheckedThrowingContinuation { c in
             continuation?.resume(throwing: CancellationError())
             continuation = c
-            webView.load(URLRequest(url: url))
+            var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData)
+            req.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+            req.setValue("no-cache", forHTTPHeaderField: "Pragma")
+            webView.load(req)
         }
     }
 
