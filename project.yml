@@ -1,0 +1,23 @@
+name: MakerDash
+options:
+  bundleIdPrefix: com.personal
+  deploymentTarget:
+    iOS: "17.0"
+targets:
+  MakerDash:
+    type: application
+    platform: iOS
+    sources: [MakerDash/Sources]
+    info:
+      path: MakerDash/Info.plist
+      properties:
+        CFBundleDisplayName: MakerDash
+        UILaunchScreen: {}
+        UIUserInterfaceStyle: Dark
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.personal.makerdash
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.9"
+        CODE_SIGNING_ALLOWED: "NO"

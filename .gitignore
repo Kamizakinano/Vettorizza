@@ -1,0 +1,4 @@
+build/
+Payload/
+out/
+*.xcodeproj/

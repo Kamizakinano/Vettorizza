@@ -1,0 +1,21 @@
+workflows:
+  unsigned-ipa:
+    name: Unsigned IPA (per Sideloadly)
+    instance_type: mac_mini_m2
+    environment:
+      xcode: latest
+    scripts:
+      - name: Genera progetto Xcode
+        script: brew install xcodegen && xcodegen generate
+      - name: Build
+        script: |
+          xcodebuild -project MakerDash.xcodeproj -scheme MakerDash \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Crea IPA
+        script: |
+          mkdir -p Payload out
+          cp -R build/Build/Products/Release-iphoneos/MakerDash.app Payload/
+          zip -qr out/MakerDash.ipa Payload
+    artifacts:
+      - out/MakerDash.ipa
