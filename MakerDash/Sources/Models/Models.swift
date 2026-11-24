@@ -11,6 +11,7 @@ struct PageProps: Decodable {
     let userInfo: UserInfo?
     let recentDesigns: RecentDesigns?
     let session: Session?
+    let selfFlag: Bool?
 }
 
 struct UserInfo: Decodable {
@@ -38,6 +39,7 @@ struct MWCount: Decodable {
 /// Presente solo se sei loggato (contiene i punti divisi Regular/Exclusive).
 struct Session: Decodable { let user: SessionUser? }
 struct SessionUser: Decodable {
+    let handle: String?
     let point: Double?
     let pointRegular: Double?
     let pointExclusive: Double?
@@ -72,6 +74,7 @@ struct ProfileStats: Codable, Equatable {
     var collections: Int
     var pointsRegular: Double
     var pointsExclusive: Double
+    var pointsKnown: Bool?
 
     init(_ p: PageProps) {
         let u = p.userInfo
@@ -81,8 +84,12 @@ struct ProfileStats: Codable, Equatable {
         downloads = u?.downloadCount ?? 0
         prints = (u?.MWCount?.myDesignPrintCount ?? 0) + (u?.MWCount?.myInstancePrintCount ?? 0)
         collections = u?.collectionCount ?? 0
-        pointsRegular = p.session?.user?.pointRegular ?? u?.point ?? 0
-        pointsExclusive = p.session?.user?.pointExclusive ?? 0
+        // I punti valgono solo se la sessione (login) appartiene allo stesso profilo.
+        let own = p.selfFlag == true &&
+            (p.session?.user?.handle?.lowercased() == u?.handle?.lowercased() || u?.handle == nil)
+        pointsKnown = own
+        pointsRegular = own ? (p.session?.user?.pointRegular ?? u?.point ?? 0) : 0
+        pointsExclusive = own ? (p.session?.user?.pointExclusive ?? 0) : 0
     }
 }
 

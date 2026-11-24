@@ -3,7 +3,7 @@ import WebKit
 
 struct SettingsView: View {
     @EnvironmentObject var store: StatsStore
-    @State private var showLogin = false
+    @State private var loginFor: String?
     @State private var newHandle = ""
 
     var body: some View {
@@ -26,7 +26,22 @@ struct SettingsView: View {
                         Button("Aggiungi") { store.addAccount(newHandle); newHandle = ""; Task { await store.refresh() } }
                             .disabled(newHandle.isEmpty)
                     }
-                    Button("Accedi a MakerWorld (per i punti)") { showLogin = true }
+                }
+                Section {
+                    ForEach(store.accounts, id: \.self) { a in
+                        HStack {
+                            Text(a)
+                            Spacer()
+                            Text(store.data[a]?.snapshot?.latest.pointsKnown == true ? "Collegato" : "Non collegato")
+                                .font(.caption).foregroundStyle(store.data[a]?.snapshot?.latest.pointsKnown == true ? .green : .secondary)
+                            Menu {
+                                Button("Accedi") { loginFor = a }
+                                Button("Esci", role: .destructive) { Task { await MakerWorldFetcher.shared.logout(handle: a) } }
+                            } label: { Image(systemName: "ellipsis.circle") }
+                        }
+                    }
+                } header: { Text("Login per i punti") } footer: {
+                    Text("Ogni account ha il suo login separato. Accedi con l'account corrispondente al nickname.")
                 }
                 Section("Preferenze") {
                     Picker("Tab all'avvio", selection: $store.defaultTab) {
@@ -43,20 +58,23 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            .sheet(isPresented: $showLogin) {
+            .sheet(item: Binding(get: { loginFor.map(LoginTarget.init) }, set: { loginFor = $0?.id })) { t in
                 NavigationStack {
-                    LoginWebView()
-                        .navigationTitle("Login MakerWorld")
-                        .toolbar { Button("Fatto") { showLogin = false; Task { await store.refresh() } } }
+                    LoginWebView(handle: t.id)
+                        .navigationTitle("Login · \(t.id)")
+                        .toolbar { Button("Fatto") { loginFor = nil; store.handle = t.id; Task { await store.refresh() } } }
                 }
             }
         }
     }
 }
 
+struct LoginTarget: Identifiable { let id: String }
+
 struct LoginWebView: UIViewRepresentable {
+    let handle: String
     func makeUIView(context: Context) -> WKWebView {
-        let wv = MakerWorldFetcher.shared.webView
+        let wv = MakerWorldFetcher.shared.webView(for: handle)
         wv.load(URLRequest(url: URL(string: "https://makerworld.com/it")!))
         return wv
     }

@@ -10,7 +10,7 @@ struct StatsView: View {
                 AccountPicker()
                 if let err = store.error { Text(err).foregroundStyle(.red).padding(.horizontal) }
                 if let s = store.stats {
-                    pointsCard(s)
+                    if s.pointsKnown == true { pointsCard(s) } else { Text("Punti: accedi con questo account in Settings → Login per i punti").font(.caption).foregroundStyle(.secondary).padding() }
                     LazyVGrid(columns: cols, spacing: 12) {
                         tile("Followers", "person.2", .cyan, \.followers)
                         tile("Boosts", "bolt", .yellow, \.boosts)
