@@ -4,12 +4,13 @@ import BackgroundTasks
 @main
 struct MakerDashApp: App {
     @StateObject private var store = StatsStore()
+    @StateObject private var vouchers = VoucherStore()
     @Environment(\.scenePhase) private var phase
     static let bgID = "com.personal.makerdash.refresh"
 
     var body: some Scene {
         WindowGroup {
-            RootView().environmentObject(store).preferredColorScheme(.dark)
+            RootView().environmentObject(store).environmentObject(vouchers).preferredColorScheme(.dark)
         }
         .onChange(of: phase) { _, p in if p == .background { Self.schedule() } }
         .backgroundTask(.appRefresh(Self.bgID)) {
@@ -33,6 +34,7 @@ struct RootView: View {
             AnalyticsView().tabItem { Label("Analytics", systemImage: "chart.bar") }.tag(0)
             StatsView().tabItem { Label("Stats", systemImage: "house") }.tag(1)
             ModelsView().tabItem { Label("Models", systemImage: "cube") }.tag(2)
+            VouchersView().tabItem { Label("Buoni", systemImage: "ticket") }.tag(4)
             SettingsView().tabItem { Label("Settings", systemImage: "gearshape") }.tag(3)
         }
         .onAppear { tab = store.defaultTab == 0 ? 1 : store.defaultTab }

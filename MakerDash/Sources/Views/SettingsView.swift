@@ -45,7 +45,7 @@ struct SettingsView: View {
                 }
                 Section("Preferenze") {
                     Picker("Tab all'avvio", selection: $store.defaultTab) {
-                        Text("Analytics").tag(0); Text("Stats").tag(1); Text("Models").tag(2)
+                        Text("Analytics").tag(0); Text("Stats").tag(1); Text("Models").tag(2); Text("Buoni").tag(4)
                     }
                     Toggle("Notifiche traguardi e boost", isOn: Binding(
                         get: { store.notificationsOn },
