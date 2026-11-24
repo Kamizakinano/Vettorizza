@@ -6,6 +6,7 @@ struct AnalyticsView: View {
     @State private var range = 7
     @State private var metric = 0
     @State private var selected: Date?
+    @State private var grouping: StatsStore.Grouping = .giorno
 
     private let metrics: [(String, KeyPath<ProfileStats, Int>, Color)] = [
         ("Downloads", \.downloads, .green), ("Prints", \.prints, .gray), ("Likes", \.likes, .pink),
@@ -19,6 +20,9 @@ struct AnalyticsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Picker("Periodo", selection: $range) {
                         Text("7G").tag(7); Text("30G").tag(30); Text("180G").tag(180); Text("1A").tag(365)
+                    }.pickerStyle(.segmented)
+                    Picker("Raggruppa", selection: $grouping) {
+                        ForEach(StatsStore.Grouping.allCases, id: \.self) { Text($0.rawValue) }
                     }.pickerStyle(.segmented)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack {
@@ -56,14 +60,24 @@ struct AnalyticsView: View {
         }
     }
 
+    private func label(_ d: Date) -> String {
+        switch grouping {
+        case .giorno: d.formatted(date: .abbreviated, time: .omitted)
+        case .settimana: "Settimana del " + d.formatted(.dateTime.day().month())
+        case .mese: d.formatted(.dateTime.month(.wide).year())
+        case .anno: d.formatted(.dateTime.year())
+        }
+    }
+
     @ViewBuilder private var chart: some View {
         let m = metrics[metric]
-        let pts = store.dailyGains(m.1, days: range)
+        let pts = store.grouped(m.1, days: range, by: grouping)
         let total = pts.map(\.value).reduce(0, +)
-        let sel = pts.first { selected != nil && Calendar.current.isDate($0.date, inSameDayAs: selected!) }
+        let comp: Calendar.Component = grouping == .giorno ? .day : grouping == .settimana ? .weekOfYear : grouping == .mese ? .month : .year
+        let sel = pts.first { selected != nil && Calendar.current.isDate($0.date, equalTo: selected!, toGranularity: comp) }
         VStack(alignment: .leading, spacing: 4) {
             if let sel {
-                Text("\(sel.date.formatted(date: .abbreviated, time: .omitted)): +\(sel.value) \(m.0.lowercased())")
+                Text("\(label(sel.date)): +\(sel.value) \(m.0.lowercased())")
                     .font(.headline)
             } else {
                 Text("+\(total) \(m.0.lowercased())").font(.headline)
@@ -74,7 +88,7 @@ struct AnalyticsView: View {
                     .font(.caption).foregroundStyle(.secondary).frame(height: 180)
             } else {
                 Chart(pts) { p in
-                    BarMark(x: .value("Giorno", p.date, unit: .day), y: .value(m.0, p.value))
+                    BarMark(x: .value("Periodo", p.date, unit: comp), y: .value(m.0, p.value))
                         .foregroundStyle(sel == nil || sel?.date == p.date ? m.2 : m.2.opacity(0.3))
                 }
                 .chartXSelection(value: $selected)

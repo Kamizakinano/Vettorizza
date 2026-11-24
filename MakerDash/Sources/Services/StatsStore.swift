@@ -91,6 +91,29 @@ final class StatsStore: ObservableObject {
         }
     }
 
+    enum Grouping: String, CaseIterable { case giorno = "Giorno", settimana = "Settimana", mese = "Mese", anno = "Anno" }
+
+    /// Somma degli incrementi raggruppati per giorno/settimana/mese/anno.
+    func grouped(_ kp: KeyPath<ProfileStats, Int>, days: Int, by g: Grouping) -> [DayPoint] {
+        let pts = dailyGains(kp, days: days)
+        guard g != .giorno else { return pts }
+        let cal = Calendar.current
+        let comp: Calendar.Component = g == .settimana ? .weekOfYear : g == .mese ? .month : .year
+        var sums: [Date: Int] = [:]
+        for p in pts {
+            let start = cal.dateInterval(of: comp, for: p.date)?.start ?? p.date
+            sums[start, default: 0] += p.value
+        }
+        return sums.map { DayPoint(date: $0.key, value: $0.value) }.sorted { $0.date < $1.date }
+    }
+
+    /// Totale guadagnato nel periodo corrente (oggi, questa settimana, questo mese, quest'anno).
+    func total(_ kp: KeyPath<ProfileStats, Int>, in comp: Calendar.Component) -> Int {
+        let cal = Calendar.current
+        guard let start = cal.dateInterval(of: comp, for: Date())?.start else { return 0 }
+        return dailyGains(kp, days: 366).filter { $0.date >= start }.map(\.value).reduce(0, +)
+    }
+
     /// Variazione % della somma degli ultimi 7 giorni rispetto ai 7 precedenti.
     func weekChange(_ kp: KeyPath<ProfileStats, Int>) -> Double? {
         let g = dailyGains(kp, days: 14)

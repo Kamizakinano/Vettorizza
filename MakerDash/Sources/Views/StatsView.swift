@@ -11,6 +11,7 @@ struct StatsView: View {
                 if let err = store.error { Text(err).foregroundStyle(.red).padding(.horizontal) }
                 if let s = store.stats {
                     if s.pointsKnown == true { pointsCard(s) } else { Text("Punti: accedi con questo account in Settings → Login per i punti").font(.caption).foregroundStyle(.secondary).padding() }
+                    boostCard
                     LazyVGrid(columns: cols, spacing: 12) {
                         tile("Followers", "person.2", .cyan, \.followers)
                         tile("Boosts", "bolt", .yellow, \.boosts)
@@ -31,6 +32,31 @@ struct StatsView: View {
             .refreshable { await store.refresh() }
             .task { await store.refresh() }
         }
+    }
+
+    private var boostCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Boost ricevuti", systemImage: "bolt.fill").font(.headline).foregroundStyle(.yellow)
+            HStack {
+                counter("Oggi", store.total(\.boosts, in: .day))
+                counter("Settimana", store.total(\.boosts, in: .weekOfYear))
+                counter("Mese", store.total(\.boosts, in: .month))
+                counter("Anno", store.total(\.boosts, in: .year))
+            }
+            Text("Totale: \(store.stats?.boosts ?? 0) · conteggio dal primo utilizzo dell'app")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.yellow.opacity(0.08)))
+        .padding(.horizontal).padding(.bottom, 12)
+    }
+
+    private func counter(_ t: String, _ v: Int) -> some View {
+        VStack {
+            Text("+\(v)").font(.title3.monospacedDigit().bold())
+            Text(t).font(.caption2).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity)
     }
 
     private func pointsCard(_ s: ProfileStats) -> some View {
