@@ -40,6 +40,8 @@ struct AnalyticsView: View {
                 .background(RoundedRectangle(cornerRadius: 16).fill(Color(white: 0.1)))
                 .padding(.horizontal)
 
+                dayDetail
+
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Insight").font(.title3.bold())
                     ForEach(store.insights) { i in
@@ -57,6 +59,49 @@ struct AnalyticsView: View {
             }
             .navigationTitle("Analytics")
             .refreshable { await store.refresh() }
+        }
+    }
+
+    @ViewBuilder private var dayDetail: some View {
+        let day = grouping == .giorno ? (selected ?? Date()) : Date()
+        let list = store.designs(on: day)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(Calendar.current.isDateInToday(day) ? "Modelli attivi oggi" : "Modelli attivi il \(day.formatted(date: .abbreviated, time: .omitted))")
+                .font(.title3.bold())
+            Text(grouping == .giorno ? "Tocca una barra del grafico per vedere un altro giorno." : "Seleziona \"Giorno\" per scegliere la data dal grafico.")
+                .font(.caption).foregroundStyle(.secondary)
+            if list.isEmpty {
+                Text("Nessuna attività registrata per questo giorno.").font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(list) { d in
+                HStack(spacing: 10) {
+                    AsyncImage(url: d.cover.flatMap(URL.init(string:))) { $0.resizable().scaledToFill() }
+                        placeholder: { Color.gray.opacity(0.2) }
+                        .frame(width: 54, height: 54).clipShape(RoundedRectangle(cornerRadius: 8))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(d.title).font(.subheadline.bold()).lineLimit(1)
+                        HStack(spacing: 10) {
+                            gainView("arrow.down.circle", d.gain.downloads, d.total.downloads, .green)
+                            gainView("printer", d.gain.prints, d.total.prints, .gray)
+                            gainView("heart", d.gain.likes, d.total.likes, .pink)
+                            gainView("bookmark", d.gain.collections, d.total.collections, .purple)
+                            gainView("bolt", d.gain.boosts, d.total.boosts, .yellow)
+                            gainView("text.bubble", d.gain.comments, d.total.comments, .cyan)
+                        }
+                    }
+                }
+                .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.1)))
+            }
+        }.padding(.horizontal).padding(.top)
+    }
+
+    private func gainView(_ icon: String, _ g: Int, _ tot: Int, _ c: Color) -> some View {
+        VStack(spacing: 1) {
+            Image(systemName: icon).font(.caption2).foregroundStyle(c)
+            Text(g > 0 ? "+\(g)" : "\(g)").font(.caption.bold().monospacedDigit())
+                .foregroundStyle(g > 0 ? c : .secondary)
+            Text("\(tot)").font(.system(size: 9).monospacedDigit()).foregroundStyle(.secondary)
         }
     }
 

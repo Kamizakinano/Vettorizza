@@ -6,7 +6,29 @@ struct AccountData: Codable {
     var snapshot: DailySnapshot?
     var history: [String: ProfileStats] = [:]     // "yyyy-MM-dd" -> ultimo valore del giorno
     var designHistory: [String: [Int: Int]] = [:] // giorno -> (id modello -> downloads)
+    var designDaily: [String: [Int: DesignCounts]]? = [:] // giorno -> (id -> contatori a fine giorno)
+    var designDayStart: [String: [Int: DesignCounts]]? = [:] // giorno -> (id -> contatori a inizio giorno)
+    var designInfo: [Int: DesignInfo]? = [:]
 }
+
+struct DesignCounts: Codable, Equatable {
+    var downloads, prints, likes, collections, comments, boosts: Int
+    init(_ d: Design) {
+        downloads = d.downloadCount; prints = d.printCount; likes = d.likeCount
+        collections = d.collectionCount; comments = d.commentCount; boosts = d.boostCnt ?? 0
+    }
+    init(downloads: Int, prints: Int, likes: Int, collections: Int, comments: Int, boosts: Int) {
+        self.downloads = downloads; self.prints = prints; self.likes = likes
+        self.collections = collections; self.comments = comments; self.boosts = boosts
+    }
+    static func - (a: Self, b: Self) -> Self {
+        .init(downloads: a.downloads - b.downloads, prints: a.prints - b.prints, likes: a.likes - b.likes,
+              collections: a.collections - b.collections, comments: a.comments - b.comments, boosts: a.boosts - b.boosts)
+    }
+    var isZero: Bool { downloads == 0 && prints == 0 && likes == 0 && collections == 0 && comments == 0 && boosts == 0 }
+}
+
+struct DesignInfo: Codable { var title: String; var cover: String? }
 
 @MainActor
 final class StatsStore: ObservableObject {
@@ -89,6 +111,26 @@ final class StatsStore: ObservableObject {
             }
             return nil
         }
+    }
+
+    struct DesignDay: Identifiable { let id: Int; let title: String; let cover: String?; let gain: DesignCounts; let total: DesignCounts }
+
+    /// Modelli con attività in un giorno: incremento rispetto al giorno precedente registrato
+    /// (o all'inizio della giornata se è il primo giorno disponibile).
+    func designs(on date: Date) -> [DesignDay] {
+        let acc = current
+        let day = Self.dayString(date)
+        guard let end = acc.designDaily?[day] else { return [] }
+        let prevDays = (acc.designDaily ?? [:]).keys.filter { $0 < day }.sorted()
+        let prev = prevDays.last.flatMap { acc.designDaily?[$0] }
+        let start = acc.designDayStart?[day] ?? [:]
+        return end.compactMap { id, e -> DesignDay? in
+            guard let base = prev?[id] ?? start[id] else { return nil }
+            let g = e - base
+            guard !g.isZero else { return nil }
+            let i = acc.designInfo?[id]
+            return DesignDay(id: id, title: i?.title ?? "#\(id)", cover: i?.cover, gain: g, total: e)
+        }.sorted { ($0.gain.downloads, $0.gain.prints) > ($1.gain.downloads, $1.gain.prints) }
     }
 
     enum Grouping: String, CaseIterable { case giorno = "Giorno", settimana = "Settimana", mese = "Mese", anno = "Anno" }
@@ -197,6 +239,15 @@ final class StatsStore: ObservableObject {
         }
         acc.history[day] = stats
         acc.designHistory[day] = Dictionary(uniqueKeysWithValues: designs.map { ($0.id, $0.downloadCount) })
+        var daily = acc.designDaily ?? [:], starts = acc.designDayStart ?? [:], info = acc.designInfo ?? [:]
+        var st = starts[day] ?? [:]
+        for d in designs {
+            if st[d.id] == nil { st[d.id] = DesignCounts(d) }
+            info[d.id] = DesignInfo(title: (d.titleTranslated?.isEmpty == false ? d.titleTranslated! : d.title), cover: d.coverUrl)
+        }
+        starts[day] = st
+        daily[day] = Dictionary(uniqueKeysWithValues: designs.map { ($0.id, DesignCounts($0)) })
+        acc.designDaily = daily; acc.designDayStart = starts; acc.designInfo = info
         data[handle] = acc
         save()
     }
