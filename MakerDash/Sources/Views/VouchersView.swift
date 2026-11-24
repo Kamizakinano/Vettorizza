@@ -6,7 +6,9 @@ struct VouchersView: View {
     @EnvironmentObject var vs: VoucherStore
     enum Filter: String, CaseIterable { case av = "Da attivare", res = "Da parte", used = "Riscattati", all = "Tutti" }
     @State private var filter: Filter = .av
-    @State private var code = "", amount = "", desc = ""
+    @State private var code = ""
+    @State private var amount = ""
+    @State private var desc = ""
     @State private var reserved = false
     @State private var showBulk = false
     @State private var bulk = ""
