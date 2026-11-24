@@ -115,6 +115,7 @@ struct VouchersView: View {
                 }
             }
             .navigationTitle("Buoni")
+            .keyboardDone()
             .overlay(alignment: .bottom) {
                 if let toast {
                     Text(toast).padding(.horizontal, 14).padding(.vertical, 8)

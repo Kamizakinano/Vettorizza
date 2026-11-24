@@ -58,6 +58,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .keyboardDone()
             .sheet(item: Binding(get: { loginFor.map(LoginTarget.init) }, set: { loginFor = $0?.id })) { t in
                 NavigationStack {
                     LoginWebView(handle: t.id)
