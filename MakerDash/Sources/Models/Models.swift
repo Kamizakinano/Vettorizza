@@ -61,7 +61,41 @@ struct Design: Identifiable, Codable {
     let isExclusive: Bool?
     let isStaffPicked: Bool?
     let publishTime: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, titleTranslated, coverUrl, cover, likeCount, collectionCount, printCount
+        case downloadCount, commentCount, boostCnt, isExclusive, isStaffPicked, publishTime, createTime
+    }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        title = (try? c.decode(String.self, forKey: .title)) ?? "#\(id)"
+        titleTranslated = try? c.decodeIfPresent(String.self, forKey: .titleTranslated)
+        coverUrl = (try? c.decodeIfPresent(String.self, forKey: .coverUrl)) ?? (try? c.decodeIfPresent(String.self, forKey: .cover))
+        likeCount = (try? c.decode(Int.self, forKey: .likeCount)) ?? 0
+        collectionCount = (try? c.decode(Int.self, forKey: .collectionCount)) ?? 0
+        printCount = (try? c.decode(Int.self, forKey: .printCount)) ?? 0
+        downloadCount = (try? c.decode(Int.self, forKey: .downloadCount)) ?? 0
+        commentCount = (try? c.decode(Int.self, forKey: .commentCount)) ?? 0
+        boostCnt = try? c.decodeIfPresent(Int.self, forKey: .boostCnt)
+        isExclusive = try? c.decodeIfPresent(Bool.self, forKey: .isExclusive)
+        isStaffPicked = try? c.decodeIfPresent(Bool.self, forKey: .isStaffPicked)
+        publishTime = (try? c.decodeIfPresent(String.self, forKey: .publishTime)) ?? (try? c.decodeIfPresent(String.self, forKey: .createTime))
+    }
+    func encode(to e: Encoder) throws {
+        var c = e.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id); try c.encode(title, forKey: .title)
+        try c.encodeIfPresent(titleTranslated, forKey: .titleTranslated); try c.encodeIfPresent(coverUrl, forKey: .coverUrl)
+        try c.encode(likeCount, forKey: .likeCount); try c.encode(collectionCount, forKey: .collectionCount)
+        try c.encode(printCount, forKey: .printCount); try c.encode(downloadCount, forKey: .downloadCount)
+        try c.encode(commentCount, forKey: .commentCount); try c.encodeIfPresent(boostCnt, forKey: .boostCnt)
+        try c.encodeIfPresent(isExclusive, forKey: .isExclusive); try c.encodeIfPresent(isStaffPicked, forKey: .isStaffPicked)
+        try c.encodeIfPresent(publishTime, forKey: .publishTime)
+    }
 }
+
+/// Risposta di /api/v1/design-service/my/design/published
+struct DesignPage: Decodable { let hits: [Design]?; let total: Int? }
 
 // MARK: - Modello interno dell'app
 

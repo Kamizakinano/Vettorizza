@@ -215,7 +215,8 @@ final class StatsStore: ObservableObject {
         do {
             let page = try await MakerWorldFetcher.shared.fetchProfile(handle: handle)
             let old = stats
-            record(ProfileStats(page), designs: page.recentDesigns?.hits ?? [])
+            let all = await MakerWorldFetcher.shared.fetchAllDesigns(handle: handle)
+            record(ProfileStats(page), designs: all ?? page.recentDesigns?.hits ?? [])
             if let old, let new = stats { await notifyMilestones(old: old, new: new) }
             error = nil
         } catch {

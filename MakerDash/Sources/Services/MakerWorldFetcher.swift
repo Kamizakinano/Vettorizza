@@ -48,6 +48,31 @@ final class MakerWorldFetcher: NSObject, WKNavigationDelegate {
         }
     }
 
+    /// Scarica tutti i modelli pubblicati, 20 alla volta, dall'interno della pagina (stessi cookie).
+    func fetchAllDesigns(handle: String) async -> [Design]? {
+        let h = handle.hasPrefix("@") ? String(handle.dropFirst()) : handle
+        let v = webView(for: h)
+        let js = """
+        const out = []; let off = 0;
+        for (let i = 0; i < 50; i++) {
+          const r = await fetch(`/api/v1/design-service/my/design/published?handle=%40${h}&limit=20&offset=${off}`,
+                                {credentials: 'include', cache: 'no-store'});
+          if (!r.ok) break;
+          const j = await r.json();
+          const hits = j.hits || [];
+          out.push(...hits);
+          off += hits.length;
+          if (hits.length < 20 || (j.total && off >= j.total)) break;
+        }
+        return JSON.stringify(out);
+        """
+        guard let res = try? await v.callAsyncJavaScript(js, arguments: ["h": h], contentWorld: .page),
+              let text = res as? String,
+              let arr = try? JSONDecoder().decode([Design].self, from: Data(text.utf8)),
+              !arr.isEmpty else { return nil }
+        return arr
+    }
+
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         Task { @MainActor in await self.extract(webView, attempt: 0) }
     }
