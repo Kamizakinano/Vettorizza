@@ -102,6 +102,33 @@ final class MakerWorldFetcher: NSObject, WKNavigationDelegate {
         return dict
     }
 
+    /// Movimenti punti (guadagnati e spesi). Richiede il login dell'account.
+    func fetchPointBills(handle: String, offset: Int, limit: Int = 20) async -> PointBillPage? {
+        let h = handle.hasPrefix("@") ? String(handle.dropFirst()) : handle
+        let v = webView(for: h)
+        let js = """
+        const r = await fetch(`/api/v1/point-service/point-bill/my?offset=${o}&limit=${l}&filter=all`, {credentials:'include', cache:'no-store'});
+        if (!r.ok) return '';
+        const j = await r.json();
+        const hits = (j.hits || []).map(x => {
+          let t = x.type, d = '';
+          const b = x.extInfoBoostExchangePoint, m = x.designRewardV2, i = x.instanceRewardV2;
+          if (b) { t = 'Boost'; d = `${b.fromUsername || ''} · ${b.designTitle || ''}`; }
+          else if (m) { t = 'Premio modello'; d = m.title || ''; }
+          else if (i) { t = 'Premio profilo'; d = `${i.instanceTitle || ''} · ${i.designTitle || ''}`; }
+          else if (x.extInfoAcademyCourseAward) { t = 'Academy'; }
+          else if (x.extInfoMakerLabFirstExport) { t = 'MakerLab'; }
+          else if ((x.type || '').includes('exchange') || (x.type || '').includes('redeem')) { t = 'Riscatto'; d = x.type; }
+          return {title: t, detail: d, change: x.pointChange || 0, regular: x.pointChangeRegular || 0,
+                  exclusive: x.pointChangeExclusive || 0, time: x.pointTime || x.createTime || ''};
+        });
+        return JSON.stringify({total: j.total || 0, income: j.totalIncome || 0, expense: j.totalExpense || 0, hits});
+        """
+        guard let res = try? await v.callAsyncJavaScript(js, arguments: ["o": offset, "l": limit], contentWorld: .page),
+              let text = res as? String, !text.isEmpty else { return nil }
+        return try? JSONDecoder().decode(PointBillPage.self, from: Data(text.utf8))
+    }
+
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         Task { @MainActor in await self.extract(webView, attempt: 0) }
     }

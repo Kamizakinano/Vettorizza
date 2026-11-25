@@ -10,7 +10,7 @@ struct StatsView: View {
                 AccountPicker()
                 if let err = store.error { Text(err).foregroundStyle(.red).padding(.horizontal) }
                 if let s = store.stats {
-                    if s.pointsKnown == true { pointsCard(s) } else { Text("Punti: accedi con questo account in Settings → Login per i punti").font(.caption).foregroundStyle(.secondary).padding() }
+                    if s.pointsKnown == true { NavigationLink { PointsHistoryView() } label: { pointsCard(s) }.buttonStyle(.plain) } else { Text("Punti: accedi con questo account in Settings → Login per i punti").font(.caption).foregroundStyle(.secondary).padding() }
                     boostCard
                     LazyVGrid(columns: cols, spacing: 8) {
                         tile("Followers", "person.2", .cyan, \.followers)
@@ -66,6 +66,9 @@ struct StatsView: View {
                     .font(.headline.monospacedDigit()).foregroundStyle(.yellow)
                 Text(d >= 0 ? "+\(d.formatted(.number.precision(.fractionLength(0...2))))" : d.formatted())
                     .font(.caption.bold()).foregroundStyle(d >= 0 ? .green : .red)
+                Spacer()
+                Text("Storico").font(.caption).foregroundStyle(.secondary)
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
             }
             HStack {
                 labeled("Regular", s.pointsRegular)
