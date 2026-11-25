@@ -45,6 +45,11 @@ final class MakerWorldFetcher: NSObject, WKNavigationDelegate {
             req.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
             req.setValue("no-cache", forHTTPHeaderField: "Pragma")
             v.load(req)
+            // Se la pagina non risponde, sblocca dopo 30 secondi
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(30))
+                if self.waiting[id] != nil { self.finish(v, .failure(URLError(.timedOut))) }
+            }
         }
     }
 
@@ -131,6 +136,12 @@ final class MakerWorldFetcher: NSObject, WKNavigationDelegate {
 
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         Task { @MainActor in await self.extract(webView, attempt: 0) }
+    }
+    nonisolated func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        Task { @MainActor in self.finish(webView, .failure(error)) }
+    }
+    nonisolated func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        Task { @MainActor in self.finish(webView, .failure(URLError(.networkConnectionLost))) }
     }
     nonisolated func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         Task { @MainActor in self.finish(webView, .failure(error)) }

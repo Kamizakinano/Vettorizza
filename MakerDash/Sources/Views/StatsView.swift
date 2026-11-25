@@ -32,6 +32,12 @@ struct StatsView: View {
             }
             .navigationTitle(store.handle.isEmpty ? "Stats" : store.handle)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    if store.loading { ProgressView() }
+                    else { Button { Task { await store.refresh() } } label: { Image(systemName: "arrow.clockwise") } }
+                }
+            }
             .refreshable { await store.refresh() }
             .task { await store.refreshIfStale() }
         }

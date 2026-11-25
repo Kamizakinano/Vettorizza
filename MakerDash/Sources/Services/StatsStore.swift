@@ -70,6 +70,7 @@ final class StatsStore: ObservableObject {
     @Published private(set) var designs: [Design] = []
     @Published var error: String?
     @Published var loading = false
+    private var loadingSince: Date?
 
     private let key = "accountData.v2"
 
@@ -293,8 +294,10 @@ final class StatsStore: ObservableObject {
 
     func refresh() async {
         guard !handle.isEmpty else { error = "Aggiungi il tuo username in Settings"; return }
-        guard !loading else { return }   // evita due aggiornamenti in parallelo
-        loading = true; defer { loading = false }
+        // evita due aggiornamenti in parallelo, ma non restare bloccato se uno si è piantato
+        if loading, let t = loadingSince, Date().timeIntervalSince(t) < 45 { return }
+        loading = true; loadingSince = Date()
+        defer { loading = false; loadingSince = nil }
         let h = handle
         do {
             let page = try await MakerWorldFetcher.shared.fetchProfile(handle: handle)
