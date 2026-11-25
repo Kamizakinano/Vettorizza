@@ -10,8 +10,11 @@ struct PointBillPage: Codable { var total: Int; var income: Double; var expense:
 struct PointsHistoryView: View {
     @EnvironmentObject var store: StatsStore
     @State private var items: [PointBill] = []
-    @State private var total = 0, income = 0.0, expense = 0.0
-    @State private var loading = false, failed = false
+    @State private var total = 0
+    @State private var income = 0.0
+    @State private var expense = 0.0
+    @State private var loading = false
+    @State private var failed = false
     @State private var filter = 0
 
     private var shown: [PointBill] {
