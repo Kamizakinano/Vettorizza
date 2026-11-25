@@ -2,6 +2,8 @@ import SwiftUI
 import Charts
 
 struct AnalyticsView: View {
+    @State private var showAllModels = false
+    @State private var expandedModels: Set<Int> = []
     @EnvironmentObject var store: StatsStore
     @State private var mode: StatsStore.Grouping = .giorno
     @State private var offset = 0          // 0 = periodo attuale, 1 = precedente, ...
@@ -140,31 +142,70 @@ struct AnalyticsView: View {
 
     @ViewBuilder private var modelsSection: some View {
         let list = store.designs(in: current)
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Modelli attivi · \(title.lowercased())").font(.title3.bold())
+        let visible = showAllModels ? list : Array(list.prefix(5))
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Modelli attivi · \(title.lowercased())").font(.title3.bold())
+                Spacer()
+                if !list.isEmpty { Text("\(list.count)").font(.subheadline).foregroundStyle(.secondary) }
+            }
             if list.isEmpty {
                 Text("Nessuna attività registrata in questo periodo.").font(.caption).foregroundStyle(.secondary)
             }
-            ForEach(list) { d in
-                HStack(spacing: 10) {
-                    RemoteImage(url: d.cover.flatMap(URL.init(string:)))
-                        .frame(width: 54, height: 54).clipShape(RoundedRectangle(cornerRadius: 8))
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(d.title).font(.subheadline.bold()).lineLimit(1)
-                        HStack(spacing: 10) {
-                            gainView("arrow.down.circle", d.gain.downloads, d.total.downloads, .green)
-                            gainView("printer", d.gain.prints, d.total.prints, .gray)
-                            gainView("heart", d.gain.likes, d.total.likes, .pink)
-                            gainView("bookmark", d.gain.collections, d.total.collections, .purple)
-                            gainView("bolt", d.gain.boosts, d.total.boosts, .yellow)
-                            gainView("text.bubble", d.gain.comments, d.total.comments, .cyan)
+            VStack(spacing: 0) {
+                ForEach(visible) { d in
+                    let open = expandedModels.contains(d.id)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            RemoteImage(url: d.cover.flatMap(URL.init(string:)))
+                                .frame(width: 36, height: 36).clipShape(RoundedRectangle(cornerRadius: 6))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(d.title).font(.subheadline).lineLimit(1)
+                                HStack(spacing: 8) {
+                                    chip("arrow.down", d.gain.downloads, .green)
+                                    chip("printer", d.gain.prints, .gray)
+                                    chip("heart", d.gain.likes, .pink)
+                                    chip("bookmark", d.gain.collections, .purple)
+                                    chip("bolt", d.gain.boosts, .yellow)
+                                    chip("text.bubble", d.gain.comments, .cyan)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: open ? "chevron.up" : "chevron.down").font(.caption2).foregroundStyle(.secondary)
+                        }
+                        if open {
+                            HStack(spacing: 10) {
+                                gainView("arrow.down.circle", d.gain.downloads, d.total.downloads, .green)
+                                gainView("printer", d.gain.prints, d.total.prints, .gray)
+                                gainView("heart", d.gain.likes, d.total.likes, .pink)
+                                gainView("bookmark", d.gain.collections, d.total.collections, .purple)
+                                gainView("bolt", d.gain.boosts, d.total.boosts, .yellow)
+                                gainView("text.bubble", d.gain.comments, d.total.comments, .cyan)
+                            }.padding(.leading, 44)
                         }
                     }
+                    .padding(.vertical, 6).padding(.horizontal, 8)
+                    .contentShape(Rectangle())
+                    .onTapGesture { if open { expandedModels.remove(d.id) } else { expandedModels.insert(d.id) } }
+                    if d.id != visible.last?.id { Divider().padding(.leading, 52) }
                 }
-                .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.1)))
+            }
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.1)))
+            if list.count > 5 {
+                Button(showAllModels ? "Mostra meno" : "Mostra tutti (\(list.count))") {
+                    withAnimation { showAllModels.toggle() }
+                }.font(.subheadline).frame(maxWidth: .infinity)
             }
         }.padding(.horizontal).padding(.top)
+    }
+
+    @ViewBuilder private func chip(_ icon: String, _ g: Int, _ c: Color) -> some View {
+        if g != 0 {
+            HStack(spacing: 2) {
+                Image(systemName: icon).font(.system(size: 9))
+                Text("\(g)").font(.caption2.bold().monospacedDigit())
+            }.foregroundStyle(c)
+        }
     }
 
     private func gainView(_ icon: String, _ g: Int, _ tot: Int, _ c: Color) -> some View {
