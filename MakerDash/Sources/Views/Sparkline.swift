@@ -11,9 +11,9 @@ struct Sparkline: View {
                     .interpolationMethod(.catmullRom).foregroundStyle(color)
             }
             .chartXAxis(.hidden).chartYAxis(.hidden)
-            .frame(height: 30)
+            
         } else {
-            Color.clear.frame(height: 30)
+            Color.clear
         }
     }
 }

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct StatsView: View {
     @EnvironmentObject var store: StatsStore
-    private let cols = [GridItem(.flexible()), GridItem(.flexible())]
+    private let cols = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
 
     var body: some View {
         NavigationStack {
@@ -12,7 +12,7 @@ struct StatsView: View {
                 if let s = store.stats {
                     if s.pointsKnown == true { pointsCard(s) } else { Text("Punti: accedi con questo account in Settings → Login per i punti").font(.caption).foregroundStyle(.secondary).padding() }
                     boostCard
-                    LazyVGrid(columns: cols, spacing: 12) {
+                    LazyVGrid(columns: cols, spacing: 8) {
                         tile("Followers", "person.2", .cyan, \.followers)
                         tile("Boosts", "bolt", .yellow, \.boosts)
                         tile("Likes", "heart", .pink, \.likes)
@@ -35,33 +35,31 @@ struct StatsView: View {
     }
 
     private var boostCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Boost ricevuti", systemImage: "bolt.fill").font(.headline).foregroundStyle(.yellow)
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Boost ricevuti", systemImage: "bolt.fill").font(.subheadline.bold()).foregroundStyle(.yellow)
             HStack {
                 counter("Oggi", store.total(\.boosts, in: .day))
                 counter("Settimana", store.total(\.boosts, in: .weekOfYear))
                 counter("Mese", store.total(\.boosts, in: .month))
                 counter("Anno", store.total(\.boosts, in: .year))
             }
-            Text("Totale: \(store.stats?.boosts ?? 0) · conteggio dal primo utilizzo dell'app")
-                .font(.caption2).foregroundStyle(.secondary)
         }
-        .padding()
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 14).fill(Color.yellow.opacity(0.08)))
-        .padding(.horizontal).padding(.bottom, 12)
+        .padding(.horizontal).padding(.bottom, 8)
     }
 
     private func counter(_ t: String, _ v: Int) -> some View {
         VStack {
-            Text("+\(v)").font(.title3.monospacedDigit().bold())
+            Text("+\(v)").font(.headline.monospacedDigit())
             Text(t).font(.caption2).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity)
     }
 
     private func pointsCard(_ s: ProfileStats) -> some View {
         let d = store.deltaPoints()
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text("Points").font(.headline)
                 Text((s.pointsRegular + s.pointsExclusive).formatted(.number.precision(.fractionLength(0...2))))
@@ -74,39 +72,36 @@ struct StatsView: View {
                 labeled("Exclusive", s.pointsExclusive)
             }
         }
-        .padding()
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 14).fill(Color(white: 0.12)))
-        .padding()
+        .padding(.horizontal).padding(.vertical, 6)
     }
 
     private func labeled(_ t: String, _ v: Double) -> some View {
         VStack(alignment: .leading) {
             Text(t).font(.caption).foregroundStyle(.secondary)
-            Text(v.formatted(.number.precision(.fractionLength(0...2)))).font(.title3.monospacedDigit().bold())
+            Text(v.formatted(.number.precision(.fractionLength(0...2)))).font(.headline.monospacedDigit())
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func tile(_ title: String, _ icon: String, _ color: Color, _ kp: KeyPath<ProfileStats, Int>) -> some View {
         let d = store.delta(kp)
-        return VStack(alignment: .leading, spacing: 6) {
-            Label(title, systemImage: icon).font(.subheadline).foregroundStyle(color)
-            Text(store.stats.map { $0[keyPath: kp].formatted() } ?? "—").font(.title2.monospacedDigit().bold())
-            HStack {
-                Text("Today:").font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                Text(d >= 0 ? "+\(d)" : "\(d)").font(.caption.bold()).foregroundStyle(d >= 0 ? .green : .red)
+        return VStack(alignment: .leading, spacing: 3) {
+            Label(title, systemImage: icon).font(.caption).foregroundStyle(color).lineLimit(1)
+            Text(store.stats.map { $0[keyPath: kp].formatted() } ?? "—")
+                .font(.headline.monospacedDigit()).minimumScaleFactor(0.6).lineLimit(1)
+            HStack(spacing: 4) {
+                Text(d >= 0 ? "+\(d)" : "\(d)").font(.caption2.bold()).foregroundStyle(d >= 0 ? .green : .red)
+                Spacer(minLength: 0)
+                if let c = store.weekChange(kp) {
+                    Text("\(c >= 0 ? "+" : "")\(Int(c))%").font(.caption2).foregroundStyle(c >= 0 ? .green : .red)
+                }
             }
-            Sparkline(points: store.dailyGains(kp, days: 7), color: color)
+            Sparkline(points: store.dailyGains(kp, days: 14), color: color).frame(height: 22)
         }
-        .overlay(alignment: .topTrailing) {
-            if let c = store.weekChange(kp) {
-                Text("\(c >= 0 ? "+" : "")\(Int(c))%").font(.caption2.bold())
-                    .foregroundStyle(c >= 0 ? .green : .red).padding(8)
-            }
-        }
-        .padding()
+        .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14).strokeBorder(color.opacity(0.4)))
+        .background(RoundedRectangle(cornerRadius: 12).strokeBorder(color.opacity(0.4)))
     }
 }

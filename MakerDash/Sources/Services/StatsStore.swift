@@ -9,6 +9,23 @@ struct AccountData: Codable {
     var designDaily: [String: [Int: DesignCounts]]? = [:] // giorno -> (id -> contatori a fine giorno)
     var designDayStart: [String: [Int: DesignCounts]]? = [:] // giorno -> (id -> contatori a inizio giorno)
     var designInfo: [Int: DesignInfo]? = [:]
+    var creatorDaily: [String: CreatorDay]? = [:] // storico ufficiale dal Creator Center
+}
+
+/// Incrementi giornalieri dal Creator Center (dateList).
+struct CreatorDay: Codable {
+    var follower, boost, like, download, print, collect: Int
+    func value(_ kp: KeyPath<ProfileStats, Int>) -> Int? {
+        switch kp {
+        case \ProfileStats.followers: return follower
+        case \ProfileStats.boosts: return boost
+        case \ProfileStats.likes: return like
+        case \ProfileStats.downloads: return download
+        case \ProfileStats.prints: return print
+        case \ProfileStats.collections: return collect
+        default: return nil
+        }
+    }
 }
 
 struct DesignCounts: Codable, Equatable {
@@ -98,8 +115,11 @@ final class StatsStore: ObservableObject {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
         let h = current.history
+        let cd = current.creatorDaily ?? [:]
         return (0..<days).reversed().compactMap { i -> DayPoint? in
-            guard let d = cal.date(byAdding: .day, value: -i, to: today),
+            guard let d0 = cal.date(byAdding: .day, value: -i, to: today) else { return nil }
+            if i > 0, let c = cd[Self.dayString(d0)], let v = c.value(kp) { return DayPoint(date: d0, value: v) }
+            guard let d = Optional(d0),
                   let prev = cal.date(byAdding: .day, value: -1, to: d),
                   let cur = h[Self.dayString(d)] else { return nil }
             if let p = h[Self.dayString(prev)] {
@@ -160,7 +180,7 @@ final class StatsStore: ObservableObject {
 
     /// Primo giorno con dati registrati.
     var firstRecordedDay: Date? {
-        current.history.keys.min().flatMap { k -> Date? in
+        (Array(current.history.keys) + Array((current.creatorDaily ?? [:]).keys)).min().flatMap { k -> Date? in
             let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f.date(from: k)
         }
     }
@@ -249,6 +269,9 @@ final class StatsStore: ObservableObject {
             let old = stats
             let all = await MakerWorldFetcher.shared.fetchAllDesigns(handle: handle)
             record(ProfileStats(page), designs: all ?? page.recentDesigns?.hits ?? [])
+            if let hist = await MakerWorldFetcher.shared.fetchCreatorHistory(handle: handle) {
+                var acc = current; acc.creatorDaily = hist; data[handle] = acc; save()
+            }
             if let old, let new = stats { await notifyMilestones(old: old, new: new) }
             error = nil
         } catch {
