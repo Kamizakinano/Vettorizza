@@ -59,20 +59,46 @@ struct StatsView: View {
 
     private func pointsCard(_ s: ProfileStats) -> some View {
         let d = store.deltaPoints()
-        return VStack(alignment: .leading, spacing: 4) {
+        let perCard = 524.0, cardEuro = 40.0, exclRate = 0.066, exclMin = 100.0
+        let total = s.pointsRegular + s.pointsExclusive
+        let cards = Int(total / perCard)
+        let toNext = perCard - total.truncatingRemainder(dividingBy: perCard)
+        let regEuro = s.pointsRegular * cardEuro / perCard
+        let exclUsd = s.pointsExclusive * exclRate
+        func num(_ v: Double) -> String { v.formatted(.number.precision(.fractionLength(0...2))) }
+        return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Points").font(.headline)
-                Text((s.pointsRegular + s.pointsExclusive).formatted(.number.precision(.fractionLength(0...2))))
-                    .font(.headline.monospacedDigit()).foregroundStyle(.yellow)
-                Text(d >= 0 ? "+\(d.formatted(.number.precision(.fractionLength(0...2))))" : d.formatted())
-                    .font(.caption.bold()).foregroundStyle(d >= 0 ? .green : .red)
+                Text(num(total)).font(.headline.monospacedDigit()).foregroundStyle(.yellow)
+                if d != 0 { Text((d > 0 ? "+" : "") + num(d)).font(.caption.bold()).foregroundStyle(d > 0 ? .green : .red) }
                 Spacer()
                 Text("Storico").font(.caption).foregroundStyle(.secondary)
                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
             }
-            HStack {
-                labeled("Regular", s.pointsRegular)
-                labeled("Exclusive", s.pointsExclusive)
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack {
+                        Text("Regular").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(cards) buoni").font(.caption2.bold()).foregroundStyle(.yellow)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Capsule().fill(Color.yellow.opacity(0.15)))
+                    }
+                    Text(num(s.pointsRegular)).font(.title3.monospacedDigit().bold())
+                    Text(regEuro.formatted(.currency(code: "EUR"))).font(.caption.monospacedDigit())
+                    Text("\(Int(toNext.rounded(.up))) pt al prossimo buono").font(.caption2).foregroundStyle(.secondary)
+                }
+                .padding(8).frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.white.opacity(0.15)))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Exclusive").font(.caption).foregroundStyle(.secondary)
+                    Text(num(s.pointsExclusive)).font(.title3.monospacedDigit().bold()).foregroundStyle(.yellow)
+                    Text(exclUsd.formatted(.currency(code: "USD"))).font(.caption.monospacedDigit())
+                    Text(exclUsd >= exclMin ? "Riscattabile" : "\((exclMin - exclUsd).formatted(.currency(code: "USD"))) al riscatto")
+                        .font(.caption2).foregroundStyle(exclUsd >= exclMin ? .green : .secondary)
+                }
+                .padding(8).frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.white.opacity(0.15)))
             }
         }
         .padding(10)
