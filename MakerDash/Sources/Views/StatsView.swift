@@ -33,7 +33,7 @@ struct StatsView: View {
             .navigationTitle(store.handle.isEmpty ? "Stats" : store.handle)
             .navigationBarTitleDisplayMode(.inline)
             .refreshable { await store.refresh() }
-            .task { await store.refresh() }
+            .task { await store.refreshIfStale() }
         }
     }
 

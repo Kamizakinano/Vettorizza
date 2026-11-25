@@ -3,7 +3,8 @@ import SwiftUI
 struct PointBill: Codable, Identifiable {
     var title: String; var detail: String; var change: Double; var regular: Double; var exclusive: Double; var time: String
     var id: String { time + title + detail + String(change) }
-    var date: Date? { ISO8601DateFormatter().date(from: time) }
+    var date: Date? { Self.iso.date(from: time) }
+    private static let iso = ISO8601DateFormatter()
 }
 struct PointBillPage: Codable { var total: Int; var income: Double; var expense: Double; var hits: [PointBill] }
 

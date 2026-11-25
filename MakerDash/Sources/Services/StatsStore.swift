@@ -62,7 +62,11 @@ final class StatsStore: ObservableObject {
     @Published var notificationsOn: Bool = UserDefaults.standard.bool(forKey: "notificationsOn") {
         didSet { UserDefaults.standard.set(notificationsOn, forKey: "notificationsOn") }
     }
-    @Published private(set) var data: [String: AccountData] = [:]
+    @Published private(set) var data: [String: AccountData] = [:] { didSet { gainsCache.removeAll() } }
+    private var gainsCache: [String: [DayPoint]] = [:]
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f
+    }()
     @Published private(set) var designs: [Design] = []
     @Published var error: String?
     @Published var loading = false
@@ -113,6 +117,14 @@ final class StatsStore: ObservableObject {
 
     /// Incremento giornaliero di una metrica per gli ultimi `days` giorni.
     func dailyGains(_ kp: KeyPath<ProfileStats, Int>, days: Int) -> [DayPoint] {
+        let key = "\(handle)|\(kp.hashValue)|\(days)|\(Self.dayString(Date()))|\(snapshot?.updated.timeIntervalSince1970 ?? 0)"
+        if let c = gainsCache[key] { return c }
+        let r = computeGains(kp, days: days)
+        gainsCache[key] = r
+        return r
+    }
+
+    private func computeGains(_ kp: KeyPath<ProfileStats, Int>, days: Int) -> [DayPoint] {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
         let h = current.history
@@ -193,7 +205,7 @@ final class StatsStore: ObservableObject {
     /// Primo giorno con dati registrati.
     var firstRecordedDay: Date? {
         (Array(current.history.keys) + Array((current.creatorDaily ?? [:]).keys)).min().flatMap { k -> Date? in
-            let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f.date(from: k)
+            Self.dayFormatter.date(from: k)
         }
     }
 
@@ -273,6 +285,12 @@ final class StatsStore: ObservableObject {
     }
 
     // MARK: Aggiornamento
+    /// Aggiorna solo se i dati hanno più di `seconds` secondi (per l'apertura delle schermate).
+    func refreshIfStale(_ seconds: TimeInterval = 120) async {
+        if let u = snapshot?.updated, Date().timeIntervalSince(u) < seconds { return }
+        await refresh()
+    }
+
     func refresh() async {
         guard !handle.isEmpty else { error = "Aggiungi il tuo username in Settings"; return }
         guard !loading else { return }   // evita due aggiornamenti in parallelo
@@ -281,9 +299,13 @@ final class StatsStore: ObservableObject {
         do {
             let page = try await MakerWorldFetcher.shared.fetchProfile(handle: handle)
             let old = stats
-            let all = await MakerWorldFetcher.shared.fetchAllDesigns(handle: handle)
-            record(ProfileStats(page), designs: all ?? page.recentDesigns?.hits ?? [])
-            if let hist = await MakerWorldFetcher.shared.fetchCreatorHistory(handle: handle) {
+            // Profilo subito a schermo, poi modelli e storico in parallelo
+            record(ProfileStats(page), designs: designs.isEmpty ? (page.recentDesigns?.hits ?? []) : designs)
+            async let allReq = MakerWorldFetcher.shared.fetchAllDesigns(handle: h)
+            async let histReq = MakerWorldFetcher.shared.fetchCreatorHistory(handle: h)
+            let (all, histRes) = await (allReq, histReq)
+            if let all, h == handle { record(ProfileStats(page), designs: all) }
+            if let hist = histRes {
                 var acc = data[h] ?? AccountData(); acc.creatorDaily = hist; data[h] = acc; save()
             }
             if let old, let new = stats { await notifyMilestones(old: old, new: new) }
@@ -351,6 +373,6 @@ final class StatsStore: ObservableObject {
     }
 
     static func dayString(_ date: Date) -> String {
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; return f.string(from: date)
+        dayFormatter.string(from: date)
     }
 }
