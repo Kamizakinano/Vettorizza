@@ -91,7 +91,7 @@ final class MakerWorldFetcher: NSObject, WKNavigationDelegate {
         const out = {};
         for (const d of list) {
           const k = (d.intervalVal || '').replaceAll('/', '-');
-          out[k] = {follower:d.follower|0, boost:d.boost|0, like:d.like|0, download:d.download|0, print:d.print|0, collect:d.collect|0};
+          out[k] = {follower:d.follower|0, boost:d.boost|0, like:d.like|0, download:d.download|0, print:d.print|0, collect:d.collect|0, point:(d.pointFromModel||0)+(d.pointFromInst||0)};
         }
         return JSON.stringify(out);
         """

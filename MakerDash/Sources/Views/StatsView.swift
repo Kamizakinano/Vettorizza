@@ -20,6 +20,8 @@ struct StatsView: View {
                         tile("Prints", "printer", .gray, \.prints)
                         tile("Collections", "bookmark", .purple, \.collections)
                     }.padding(.horizontal)
+                    forecastCard(s)
+                    topModelsCard
                     if let u = store.snapshot?.updated {
                         Text("Aggiornato \(u.formatted(.relative(presentation: .named)))")
                             .font(.caption).foregroundStyle(.secondary).padding()
@@ -29,6 +31,7 @@ struct StatsView: View {
                 }
             }
             .navigationTitle(store.handle.isEmpty ? "Stats" : store.handle)
+            .navigationBarTitleDisplayMode(.inline)
             .refreshable { await store.refresh() }
             .task { await store.refresh() }
         }
@@ -105,6 +108,68 @@ struct StatsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 14).fill(Color(white: 0.12)))
         .padding(.horizontal).padding(.vertical, 6)
+    }
+
+    @ViewBuilder private func forecastCard(_ s: ProfileStats) -> some View {
+        if let avg = store.pointsPerDay(days: 7) {
+            let avg30 = store.pointsPerDay(days: 30)
+            let total = s.pointsRegular + s.pointsExclusive
+            let toNext = 524 - total.truncatingRemainder(dividingBy: 524)
+            let next = Calendar.current.date(byAdding: .day, value: Int((toNext / max(avg, 0.1)).rounded(.up)), to: Date())!
+            let trend = avg30.map { avg - $0 } ?? 0
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Label("Previsione punti", systemImage: "chart.line.uptrend.xyaxis").font(.subheadline.bold()).foregroundStyle(.mint)
+                    Spacer()
+                    Text("~\(Int(avg)) pt/giorno").font(.caption.monospacedDigit())
+                    if avg30 != nil {
+                        Image(systemName: trend >= 0 ? "arrow.up.right" : "arrow.down.right")
+                            .font(.caption2).foregroundStyle(trend >= 0 ? .green : .red)
+                    }
+                }
+                HStack {
+                    fc("7 giorni", avg * 7)
+                    fc("30 giorni", avg * 30)
+                    fc("90 giorni", avg * 90)
+                }
+                Text("Prossimo buono: ~\(next.formatted(.dateTime.day().month(.abbreviated))) · ~\(Int(avg * 30 / 524)) buoni al mese")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 14).fill(Color.mint.opacity(0.08)))
+            .padding(.horizontal).padding(.top, 8)
+        }
+    }
+
+    private func fc(_ t: String, _ pts: Double) -> some View {
+        VStack(spacing: 1) {
+            Text("+\(Int(pts))").font(.headline.monospacedDigit())
+            Text("\(t) · \((pts * 40 / 524).formatted(.currency(code: "EUR").precision(.fractionLength(0))))")
+                .font(.caption2).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder private var topModelsCard: some View {
+        let today = Calendar.current.dateInterval(of: .day, for: Date())!
+        let top = Array(store.designs(in: today).prefix(3))
+        if !top.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Top modelli oggi", systemImage: "flame").font(.subheadline.bold()).foregroundStyle(.orange)
+                ForEach(top) { d in
+                    HStack(spacing: 8) {
+                        RemoteImage(url: d.cover.flatMap(URL.init(string:)))
+                            .frame(width: 28, height: 28).clipShape(RoundedRectangle(cornerRadius: 5))
+                        Text(d.title).font(.caption).lineLimit(1)
+                        Spacer()
+                        Text("↓\(d.gain.downloads)").font(.caption.monospacedDigit()).foregroundStyle(.green)
+                        Text("🖨\(d.gain.prints)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 14).fill(Color(white: 0.1)))
+            .padding(.horizontal).padding(.top, 8)
+        }
     }
 
     private func labeled(_ t: String, _ v: Double) -> some View {

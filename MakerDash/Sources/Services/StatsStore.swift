@@ -15,6 +15,7 @@ struct AccountData: Codable {
 /// Incrementi giornalieri dal Creator Center (dateList).
 struct CreatorDay: Codable {
     var follower, boost, like, download, print, collect: Int
+    var point: Double?
     func value(_ kp: KeyPath<ProfileStats, Int>) -> Int? {
         switch kp {
         case \ProfileStats.followers: return follower
@@ -178,6 +179,17 @@ final class StatsStore: ObservableObject {
         dailyGains(kp, days: 800).filter { interval.contains($0.date) }.map(\.value).reduce(0, +)
     }
 
+    /// Media punti al giorno degli ultimi `days` giorni completi (dal Creator Center).
+    func pointsPerDay(days: Int) -> Double? {
+        let cd = current.creatorDaily ?? [:]
+        let cal = Calendar.current, today = cal.startOfDay(for: Date())
+        let vals = (1...days).compactMap { i in
+            cal.date(byAdding: .day, value: -i, to: today).flatMap { cd[Self.dayString($0)]?.point }
+        }
+        guard vals.count >= max(3, days / 2) else { return nil }
+        return vals.reduce(0, +) / Double(vals.count)
+    }
+
     /// Primo giorno con dati registrati.
     var firstRecordedDay: Date? {
         (Array(current.history.keys) + Array((current.creatorDaily ?? [:]).keys)).min().flatMap { k -> Date? in
@@ -263,17 +275,21 @@ final class StatsStore: ObservableObject {
     // MARK: Aggiornamento
     func refresh() async {
         guard !handle.isEmpty else { error = "Aggiungi il tuo username in Settings"; return }
+        guard !loading else { return }   // evita due aggiornamenti in parallelo
         loading = true; defer { loading = false }
+        let h = handle
         do {
             let page = try await MakerWorldFetcher.shared.fetchProfile(handle: handle)
             let old = stats
             let all = await MakerWorldFetcher.shared.fetchAllDesigns(handle: handle)
             record(ProfileStats(page), designs: all ?? page.recentDesigns?.hits ?? [])
             if let hist = await MakerWorldFetcher.shared.fetchCreatorHistory(handle: handle) {
-                var acc = current; acc.creatorDaily = hist; data[handle] = acc; save()
+                var acc = data[h] ?? AccountData(); acc.creatorDaily = hist; data[h] = acc; save()
             }
             if let old, let new = stats { await notifyMilestones(old: old, new: new) }
             error = nil
+        } catch is CancellationError {
+            // aggiornamento sostituito da uno nuovo: nessun errore da mostrare
         } catch {
             self.error = "Aggiornamento fallito: \(error.localizedDescription)"
         }
