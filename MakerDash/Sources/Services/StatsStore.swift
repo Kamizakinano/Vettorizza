@@ -138,53 +138,23 @@ final class StatsStore: ObservableObject {
         return Double(f(a)) + Double(f(b) - f(a)) * (t - TimeInterval(a.t)) / TimeInterval(b.t - a.t)
     }
 
-    /// Ore di scarto tra la mezzanotte italiana e l'inizio del giorno del Creator Center (misurato dai dati).
-    @Published var ccOffset: Int? = UserDefaults.standard.object(forKey: "ccOffsetHours") as? Int {
-        didSet { UserDefaults.standard.set(ccOffset, forKey: "ccOffsetHours"); gainsCache.removeAll() }
-    }
-    @Published var ccOffsetDays = UserDefaults.standard.integer(forKey: "ccOffsetDays") {
-        didSet { UserDefaults.standard.set(ccOffsetDays, forKey: "ccOffsetDays") }
-    }
+    /// Il Creator Center di MakerWorld usa giorni in UTC (GMT): in Italia dall'01:00 all'01:00 (02:00 con l'ora legale).
+    private static let utc: Calendar = { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c }()
 
-    /// Inizio del giorno di una data etichetta (stesso orario del Creator Center se già misurato).
-    func windowStart(_ label: Date) -> Date { label.addingTimeInterval(TimeInterval((ccOffset ?? 0) * 3600)) }
-    /// Inizio del "giorno" in corso.
-    var dayStart: Date {
-        let off = TimeInterval((ccOffset ?? 0) * 3600)
-        return Calendar.current.startOfDay(for: Date().addingTimeInterval(-off)).addingTimeInterval(off)
+    /// Inizio (mezzanotte UTC) del giorno con questa etichetta.
+    func windowStart(_ label: Date) -> Date {
+        let c = Calendar.current.dateComponents([.year, .month, .day], from: label)
+        return Self.utc.date(from: c) ?? label
     }
+    /// Etichetta (mezzanotte locale) del giorno MakerWorld in corso.
+    var todayLabel: Date {
+        Calendar.current.date(from: Self.utc.dateComponents([.year, .month, .day], from: Date())) ?? Calendar.current.startOfDay(for: Date())
+    }
+    /// Inizio del giorno MakerWorld in corso.
+    var dayStart: Date { Self.utc.startOfDay(for: Date()) }
 
-    /// Confronta i giorni chiusi del Creator Center con i controlli orari per trovare a che ora inizia il loro giorno.
-    func calibrateCreatorDay() {
-        guard handle.lowercased() == "kamy29", hourly.count > 24 else { return }
-        let cd = current.creatorDaily ?? [:]
-        guard let lastCC = cd.keys.max() else { return }
-        let days = cd.keys.filter { $0 != lastCC }.compactMap { k -> (Date, CreatorDay)? in
-            guard let d = Self.dayFormatter.date(from: k), let c = cd[k] else { return nil }
-            return (d, c)
-        }
-        var best: (off: Int, err: Double, n: Int)?
-        for off in -48...24 {
-            var err = 0.0, n = 0
-            for (d, c) in days {
-                let a = d.addingTimeInterval(TimeInterval(off * 3600)), b = a.addingTimeInterval(86400)
-                guard let d0 = hourlyValue(\.downloads, at: a), let d1 = hourlyValue(\.downloads, at: b),
-                      let p0 = hourlyValue(\.prints, at: a), let p1 = hourlyValue(\.prints, at: b) else { continue }
-                err += abs((d1 - d0) - Double(c.download)) + abs((p1 - p0) - Double(c.print)); n += 1
-            }
-            guard n > 0 else { continue }
-            let e = err / Double(n)
-            if best == nil || n > best!.n || (n == best!.n && e < best!.err) { best = (off, e, n) }
-        }
-        if let b = best { ccOffset = b.off; ccOffsetDays = b.n }
-    }
-
-    /// Testo leggibile: a che ora (italiana) inizia il giorno del Creator Center.
-    var ccDayDescription: String? {
-        guard let o = ccOffset else { return nil }
-        let h = ((o % 24) + 24) % 24
-        return String(format: "%02d:00", h)
-    }
+    /// Orario italiano a cui inizia il giorno MakerWorld (01:00 o 02:00 con l'ora legale).
+    var ccDayDescription: String? { dayStart.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute()) }
 
     /// Contatori di un modello interpolati a mezzanotte di oggi (dai campioni orari).
     func designAtMidnight(_ id: Int) -> DesignCounts? {
@@ -219,7 +189,7 @@ final class StatsStore: ObservableObject {
                   let hl = hourlyValue(kp, at: Date(timeIntervalSince1970: TimeInterval(last.t))) {
             // primo giorno dopo l'aggiornamento: crescita oraria da mezzanotte all'ultimo campione
             return Int((hl - h0).rounded())
-        } else if ccOffset == nil, let y = cal.date(byAdding: .day, value: -1, to: midnight),
+        } else if let y = cal.date(byAdding: .day, value: -1, to: midnight),
            let prev = current.history[Self.dayString(y)],
            let t0 = current.prevDayEnd, let t1 = s.created, t1 > t0, t0 < midnight, t1 >= midnight {
             let p = Double(prev[keyPath: kp])
@@ -271,7 +241,7 @@ final class StatsStore: ObservableObject {
 
     private func computeGains(_ kp: KeyPath<ProfileStats, Int>, days: Int) -> [DayPoint] {
         let cal = Calendar.current
-        let today = cal.startOfDay(for: Date())
+        let today = todayLabel
         let h = current.history
         let cd = current.creatorDaily ?? [:]
         let lastCC = cd.keys.max()
@@ -279,7 +249,7 @@ final class StatsStore: ObservableObject {
         return (0..<days).reversed().compactMap { i -> DayPoint? in
             guard let d0 = cal.date(byAdding: .day, value: -i, to: today) else { return nil }
             // oggi: stesso valore mostrato in Stats
-            if i == 0 { return snapshot?.day == Self.dayString(today) ? DayPoint(date: d0, value: delta(kp)) : nil }
+            if i == 0 { return snapshot != nil ? DayPoint(date: d0, value: delta(kp)) : nil }
             if i > 0, useHourlyDays, Self.dayString(d0) == lastCC || cd[Self.dayString(d0)] == nil,
                let a = hourlyValue(kp, at: windowStart(d0)), let b = hourlyValue(kp, at: windowStart(d0).addingTimeInterval(86400)) {
                 // giorno coperto dai controlli orari: esattamente da mezzanotte a mezzanotte (ora italiana)
@@ -350,7 +320,7 @@ final class StatsStore: ObservableObject {
     /// Media punti al giorno degli ultimi `days` giorni completi (dal Creator Center).
     func pointsPerDay(days: Int) -> Double? {
         let cd = current.creatorDaily ?? [:]
-        let cal = Calendar.current, today = cal.startOfDay(for: Date())
+        let cal = Calendar.current, today = todayLabel
         let vals = (1...days).compactMap { i in
             cal.date(byAdding: .day, value: -i, to: today).flatMap { cd[Self.dayString($0)]?.point }
         }
@@ -469,7 +439,6 @@ final class StatsStore: ObservableObject {
             if let hist = histRes {
                 var acc = data[h] ?? AccountData(); acc.creatorDaily = hist; data[h] = acc; save()
             }
-            calibrateCreatorDay()
             if let old, let new = stats { await notifyMilestones(old: old, new: new) }
             updateWidget()
             error = nil
@@ -514,7 +483,7 @@ final class StatsStore: ObservableObject {
     func updateWidget() {
         let wh = accounts.first { $0.lowercased() == "kamy29" } ?? handle
         guard handle == wh, let st = stats else { return }
-        let cal = Calendar.current, today = cal.startOfDay(for: Date())
+        let cal = Calendar.current, today = todayLabel
         let cd = current.creatorDaily ?? [:]
         var p14: [Double] = (1..<14).reversed().compactMap { i in
             cal.date(byAdding: .day, value: -i, to: today).flatMap { cd[Self.dayString($0)]?.point }

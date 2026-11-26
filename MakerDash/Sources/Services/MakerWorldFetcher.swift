@@ -84,19 +84,30 @@ final class MakerWorldFetcher: NSObject, WKNavigationDelegate {
         let v = webView(for: h)
         let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
         let end = f.string(from: Date())
-        let start = f.string(from: Calendar.current.date(byAdding: .year, value: -1, to: Date())!)
+        let start = f.string(from: Calendar.current.date(byAdding: .day, value: -399, to: Date())!)
+        // Il Creator Center su intervalli lunghi raggruppa più giorni in una sola voce:
+        // chiedo blocchi da 20 giorni, così ogni voce è un giorno solo.
         let js = """
-        const r = await fetch(`/it/my/data-overview/model?endDate=${e}&startDate=${s}`, {credentials:'include', cache:'no-store'});
-        if (!r.ok) return '';
-        const html = await r.text();
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        const el = doc.getElementById('__NEXT_DATA__'); if (!el) return '';
-        const j = JSON.parse(el.textContent);
-        const list = j?.props?.pageProps?.statisticalData?.dateList || [];
         const out = {};
-        for (const d of list) {
-          const k = (d.intervalVal || '').replaceAll('/', '-');
-          out[k] = {follower:d.follower|0, boost:d.boost|0, like:d.like|0, download:d.download|0, print:d.print|0, collect:d.collect|0, point:(d.pointFromModel||0)+(d.pointFromInst||0)};
+        const day = 86400000;
+        let endT = Date.parse(e + 'T00:00:00Z');
+        const startT = Date.parse(s + 'T00:00:00Z');
+        while (endT >= startT) {
+          const st = Math.max(startT, endT - 19 * day);
+          const fmt = t => new Date(t).toISOString().slice(0, 10);
+          const r = await fetch(`/it/my/data-overview/model?endDate=${fmt(endT)}&startDate=${fmt(st)}`, {credentials:'include', cache:'no-store'});
+          if (!r.ok) break;
+          const html = await r.text();
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+          const el = doc.getElementById('__NEXT_DATA__'); if (!el) break;
+          const j = JSON.parse(el.textContent);
+          const list = j?.props?.pageProps?.statisticalData?.dateList || [];
+          for (const d of list) {
+            const k = (d.intervalVal || '').replaceAll('/', '-');
+            if (!k) continue;
+            out[k] = {follower:d.follower|0, boost:d.boost|0, like:d.like|0, download:d.download|0, print:d.print|0, collect:d.collect|0, point:(d.pointFromModel||0)+(d.pointFromInst||0)};
+          }
+          endT = st - day;
         }
         return JSON.stringify(out);
         """

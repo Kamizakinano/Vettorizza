@@ -28,9 +28,7 @@ struct StatsView: View {
                     }
                     Group {
                         if let h = store.ccDayDescription {
-                            Text("Giorni come il Creator Center: dalle \(h) alle \(h) (ora italiana, misurato su \(store.ccOffsetDays) giorni)")
-                        } else if store.handle.lowercased() == "kamy29" {
-                            Text("Sto misurando a che ora il Creator Center chiude il giorno (serve almeno 1 giorno di controlli orari)")
+                            Text("Giorni come il Creator Center (UTC): dalle \(h) alle \(h) ora italiana")
                         }
                     }.font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal).padding(.bottom)
                 } else if store.loading {
