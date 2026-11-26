@@ -11,6 +11,7 @@ struct AccountData: Codable {
     var designDayStart: [String: [Int: DesignCounts]]? = [:] // giorno -> (id -> contatori a inizio giorno)
     var designInfo: [Int: DesignInfo]? = [:]
     var creatorDaily: [String: CreatorDay]? = [:] // storico ufficiale dal Creator Center
+    var prevDayEnd: Date? = nil                    // ora dell'ultimo aggiornamento di ieri
 }
 
 /// Incrementi giornalieri dal Creator Center (dateList).
@@ -101,9 +102,20 @@ final class StatsStore: ObservableObject {
     }
 
     // MARK: Delta giornalieri
+    /// Incremento di oggi stimato dalla mezzanotte: se ho l'ultimo valore di ieri e il primo di oggi
+    /// (con i loro orari) interpolo il valore a mezzanotte; altrimenti uso il primo valore di oggi.
     func delta(_ kp: KeyPath<ProfileStats, Int>) -> Int {
         guard let s = snapshot else { return 0 }
-        return s.latest[keyPath: kp] - s.startOfDay[keyPath: kp]
+        let cal = Calendar.current, midnight = cal.startOfDay(for: Date())
+        let first = Double(s.startOfDay[keyPath: kp])
+        var base = first
+        if let y = cal.date(byAdding: .day, value: -1, to: midnight),
+           let prev = current.history[Self.dayString(y)],
+           let t0 = current.prevDayEnd, let t1 = s.created, t1 > t0, t0 < midnight, t1 >= midnight {
+            let p = Double(prev[keyPath: kp])
+            base = p + (first - p) * midnight.timeIntervalSince(t0) / t1.timeIntervalSince(t0)
+        }
+        return Int((Double(s.latest[keyPath: kp]) - base).rounded())
     }
     func deltaPoints() -> Double {
         guard let s = snapshot else { return 0 }
@@ -133,6 +145,8 @@ final class StatsStore: ObservableObject {
         let cd = current.creatorDaily ?? [:]
         return (0..<days).reversed().compactMap { i -> DayPoint? in
             guard let d0 = cal.date(byAdding: .day, value: -i, to: today) else { return nil }
+            // oggi: stesso valore mostrato in Stats
+            if i == 0 { return snapshot?.day == Self.dayString(today) ? DayPoint(date: d0, value: delta(kp)) : nil }
             if i > 0, let c = cd[Self.dayString(d0)], let v = c.value(kp) { return DayPoint(date: d0, value: v) }
             guard let d = Optional(d0),
                   let prev = cal.date(byAdding: .day, value: -1, to: d),
@@ -332,9 +346,10 @@ final class StatsStore: ObservableObject {
             s.updated = Date()
             acc.snapshot = s
         } else {
+            acc.prevDayEnd = acc.snapshot?.updated
             acc.snapshot = DailySnapshot(day: day, startOfDay: stats, latest: stats,
                                          designsStart: Dictionary(uniqueKeysWithValues: designs.map { ($0.id, $0) }),
-                                         updated: Date())
+                                         updated: Date(), created: Date())
         }
         acc.history[day] = stats
         acc.designHistory[day] = Dictionary(uniqueKeysWithValues: designs.map { ($0.id, $0.downloadCount) })

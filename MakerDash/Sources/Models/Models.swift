@@ -133,4 +133,5 @@ struct DailySnapshot: Codable {
     var latest: ProfileStats
     var designsStart: [Int: Design]
     var updated: Date
+    var created: Date? = nil
 }
