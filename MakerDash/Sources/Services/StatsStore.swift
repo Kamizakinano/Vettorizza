@@ -1,5 +1,6 @@
 import Foundation
 import UserNotifications
+import WidgetKit
 
 /// Dati salvati per ogni account.
 struct AccountData: Codable {
@@ -312,6 +313,7 @@ final class StatsStore: ObservableObject {
                 var acc = data[h] ?? AccountData(); acc.creatorDaily = hist; data[h] = acc; save()
             }
             if let old, let new = stats { await notifyMilestones(old: old, new: new) }
+            updateWidget()
             error = nil
         } catch is CancellationError {
             // aggiornamento sostituito da uno nuovo: nessun errore da mostrare
@@ -347,6 +349,32 @@ final class StatsStore: ObservableObject {
         acc.designDaily = daily; acc.designDayStart = starts; acc.designInfo = info
         data[handle] = acc
         save()
+    }
+
+    /// Salva i dati per il widget (account Kamy29) e lo aggiorna.
+    func updateWidget() {
+        let wh = accounts.first { $0.lowercased() == "kamy29" } ?? handle
+        guard handle == wh, let st = stats else { return }
+        let cal = Calendar.current, today = cal.startOfDay(for: Date())
+        let cd = current.creatorDaily ?? [:]
+        var p14: [Double] = (1..<14).reversed().compactMap { i in
+            cal.date(byAdding: .day, value: -i, to: today).flatMap { cd[Self.dayString($0)]?.point }
+        }
+        p14.append(deltaPoints())
+        let top = designs(in: cal.dateInterval(of: .day, for: Date())!).prefix(3).map {
+            WidgetData.Top(title: $0.title, downloads: $0.gain.downloads, prints: $0.gain.prints)
+        }
+        let w = WidgetData(updated: snapshot?.updated ?? Date(), handle: wh,
+                           points: st.pointsKnown == true ? st.pointsRegular + st.pointsExclusive : nil,
+                           pointsToday: deltaPoints(), perDay: pointsPerDay(days: 7),
+                           downloads: delta(\.downloads), prints: delta(\.prints), likes: delta(\.likes),
+                           followers: delta(\.followers), boosts: delta(\.boosts),
+                           spark7Downloads: dailyGains(\.downloads, days: 7).map(\.value),
+                           spark7Prints: dailyGains(\.prints, days: 7).map(\.value),
+                           spark7Likes: dailyGains(\.likes, days: 7).map(\.value),
+                           points14: p14, top: Array(top))
+        w.save()
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func save() {

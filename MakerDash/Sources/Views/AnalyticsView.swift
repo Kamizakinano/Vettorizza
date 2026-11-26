@@ -58,6 +58,16 @@ struct AnalyticsView: View {
             ScrollView {
                 AccountPicker()
                 VStack(alignment: .leading, spacing: 14) {
+                    NavigationLink { BestHoursView() } label: {
+                        HStack {
+                            Label("Orari migliori", systemImage: "clock.badge.checkmark").font(.subheadline.bold()).foregroundStyle(.yellow)
+                            Spacer()
+                            Text("Download e stampe per ora").font(.caption).foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                        }
+                        .padding(10)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.yellow.opacity(0.08)))
+                    }.buttonStyle(.plain)
                     Picker("Periodo", selection: $mode) {
                         ForEach(StatsStore.Grouping.allCases, id: \.self) { Text($0.rawValue) }
                     }

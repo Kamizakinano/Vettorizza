@@ -16,6 +16,10 @@ workflows:
         script: |
           mkdir -p Payload out
           cp -R build/Build/Products/Release-iphoneos/MakerDash.app Payload/
+          # firma ad-hoc con l'App Group, così Sideloadly lo registra per app e widget
+          codesign -f -s - --entitlements MakerDashWidget/Widget.entitlements Payload/MakerDash.app/PlugIns/MakerDashWidget.appex
+          codesign -f -s - --entitlements MakerDash/App.entitlements Payload/MakerDash.app
+          ls Payload/MakerDash.app/PlugIns
           zip -qr out/MakerDash.ipa Payload
     artifacts:
       - out/MakerDash.ipa
