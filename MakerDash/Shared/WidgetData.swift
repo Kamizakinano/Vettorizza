@@ -117,7 +117,7 @@ enum PublicStats {
                 }
                 gains.sort { $0.1 > $1.1 }
                 let titles = await designTitles()
-                w.top = gains.prefix(3).map { Top(title: titles[$0.0] ?? "Modello", downloads: $0.1, prints: $0.2) }
+                w.top = gains.prefix(3).map { WidgetData.Top(title: titles[$0.0] ?? "Modello", downloads: $0.1, prints: $0.2) }
             }
             w.updated = Date(timeIntervalSince1970: lastT)
             return
