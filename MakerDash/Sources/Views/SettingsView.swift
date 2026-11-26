@@ -1,3 +1,4 @@
+import WidgetKit
 import SwiftUI
 import WebKit
 
@@ -52,6 +53,19 @@ struct SettingsView: View {
                         set: { v in if v { Task { await store.requestNotifications() } } else { store.notificationsOn = false } }))
                 }
                 Section { Button("Aggiorna ora") { Task { await store.refresh() } } }
+                Section("Widget") {
+                    if WidgetData.fileURL != nil {
+                        Label("Collegato all'app", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        if let w = WidgetData.load() {
+                            Text("Ultimi dati inviati: \(w.updated.formatted(date: .omitted, time: .shortened)) · \(w.downloads) download oggi")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Label("Non collegato: il widget non riceve i dati dell'app (App Group mancante)", systemImage: "xmark.octagon.fill").foregroundStyle(.red)
+                        Text("Gruppo cercato: \(WidgetData.groupID)").font(.caption2).foregroundStyle(.secondary)
+                    }
+                    Button("Aggiorna widget") { store.updateWidget(); WidgetCenter.shared.reloadAllTimelines() }
+                }
                 Section {
                     Text("Le statistiche pubbliche non richiedono login. Il login serve per i punti e avviene direttamente su makerworld.com. L'app prova ad aggiornarsi in background ogni 30 minuti circa (iOS decide quando).")
                         .font(.footnote).foregroundStyle(.secondary)

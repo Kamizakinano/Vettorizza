@@ -62,29 +62,37 @@ enum PublicStats {
     struct File: Decodable { let samples: [S] }
     static let url = URL(string: "https://raw.githubusercontent.com/kamizakinano/vettorizza/stats-data/hourly/Kamy29.json")!
 
-    /// Aggiorna download/stampe/like/follower di oggi e le sparkline 7 giorni.
+    /// Aggiorna i numeri di oggi con i controlli orari arrivati dopo l'ultimo aggiornamento dell'app.
+    /// Il giorno è quello di MakerWorld (UTC), come nell'app.
     static func merge(into w: inout WidgetData) async {
         var req = URLRequest(url: url, timeoutInterval: 15); req.cachePolicy = .reloadIgnoringLocalCacheData
         guard let (d, _) = try? await URLSession.shared.data(for: req),
               let f = try? JSONDecoder().decode(File.self, from: d), let last = f.samples.last else { return }
-        let lastDate = Date(timeIntervalSince1970: TimeInterval(last.t))
-        guard lastDate > w.updated else { return }
-        let cal = Calendar.current
-        func firstSample(onOrAfter day: Date) -> S? { f.samples.first { TimeInterval($0.t) >= day.timeIntervalSince1970 } }
-        let today = cal.startOfDay(for: Date())
-        // base = ultimo campione prima di mezzanotte (se c'è), altrimenti il primo di oggi
-        let base = f.samples.last { TimeInterval($0.t) < today.timeIntervalSince1970 } ?? firstSample(onOrAfter: today)
-        if let b = base {
-            w.downloads = last.d - b.d; w.prints = last.p - b.p; w.likes = last.l - b.l; w.followers = last.f - b.f
+        let lastT = TimeInterval(last.t)
+        guard lastT > w.updated.timeIntervalSince1970 else { return }
+        var utc = Calendar(identifier: .gregorian); utc.timeZone = TimeZone(identifier: "UTC")!
+        let dayStart = utc.startOfDay(for: Date()).timeIntervalSince1970
+        func value(_ t: TimeInterval, _ k: (S) -> Int) -> Double? {
+            guard let a = f.samples.last(where: { TimeInterval($0.t) <= t }),
+                  let b = f.samples.first(where: { TimeInterval($0.t) >= t }),
+                  t - TimeInterval(a.t) <= 3 * 3600, TimeInterval(b.t) - t <= 3 * 3600 else { return nil }
+            if a.t == b.t { return Double(k(a)) }
+            return Double(k(a)) + Double(k(b) - k(a)) * (t - TimeInterval(a.t)) / TimeInterval(b.t - a.t)
         }
-        var dl: [Int] = [], pr: [Int] = [], lk: [Int] = []
-        for i in (0..<7).reversed() {
-            let s = cal.date(byAdding: .day, value: -i, to: today)!, e = cal.date(byAdding: .day, value: 1, to: s)!
-            let inDay = f.samples.filter { TimeInterval($0.t) >= s.timeIntervalSince1970 && TimeInterval($0.t) < e.timeIntervalSince1970 }
-            let start = f.samples.last { TimeInterval($0.t) < s.timeIntervalSince1970 } ?? inDay.first
-            if let a = start, let z = inDay.last { dl.append(z.d - a.d); pr.append(z.p - a.p); lk.append(z.l - a.l) }
+        let appSameDay = w.updated.timeIntervalSince1970 >= dayStart
+        func gain(_ cur: Int, _ k: @escaping (S) -> Int) -> Int {
+            let now = Double(k(last))
+            if appSameDay, let base = value(w.updated.timeIntervalSince1970, k) {
+                return cur + Int((now - base).rounded())          // dato dell'app + crescita successiva
+            }
+            if let base = value(dayStart, k) { return Int((now - base).rounded()) } // nuovo giorno
+            return appSameDay ? cur : 0
         }
-        if dl.count >= 2 { w.spark7Downloads = dl; w.spark7Prints = pr; w.spark7Likes = lk }
-        w.updated = lastDate
+        w.downloads = gain(w.downloads) { $0.d }
+        w.prints = gain(w.prints) { $0.p }
+        w.likes = gain(w.likes) { $0.l }
+        w.followers = gain(w.followers) { $0.f }
+        if !appSameDay { w.pointsToday = 0; w.boosts = 0; w.top = [] }
+        w.updated = Date(timeIntervalSince1970: lastT)
     }
 }
