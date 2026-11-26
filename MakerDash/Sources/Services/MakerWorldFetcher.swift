@@ -103,22 +103,16 @@ final class MakerWorldFetcher: NSObject, WKNavigationDelegate {
         }
         return JSON.stringify(out);
         """
-        var all: [String: CreatorDay] = [:]
-        var ok = 0
-        var end = cal.startOfDay(for: Date())
-        for i in 0..<chunks {
-            await progress(i, chunks)
-            let start = cal.date(byAdding: .day, value: -19, to: end)!
-            if let res = try? await v.callAsyncJavaScript(js, arguments: ["e": f.string(from: end), "s": f.string(from: start)], contentWorld: .page),
-               let text = res as? String, !text.isEmpty,
-               let dict = try? JSONDecoder().decode([String: CreatorDay].self, from: Data(text.utf8)) {
-                all.merge(dict) { a, _ in a }
-                ok += 1
-            }
-            end = cal.date(byAdding: .day, value: -1, to: start)!
-        }
-        await progress(chunks, chunks)
-        return ok >= chunks / 2 && !all.isEmpty ? all : nil
+        // Una sola richiesta per l'ultimo anno: il Creator Center restituisce comunque una voce per ogni giorno (UTC).
+        await progress(0, 1)
+        let end = cal.startOfDay(for: Date())
+        let start = cal.date(byAdding: .day, value: -399, to: end)!
+        defer { Task { await progress(1, 1) } }
+        guard let res = try? await v.callAsyncJavaScript(js, arguments: ["e": f.string(from: end), "s": f.string(from: start)], contentWorld: .page),
+              let text = res as? String, !text.isEmpty,
+              let dict = try? JSONDecoder().decode([String: CreatorDay].self, from: Data(text.utf8)), !dict.isEmpty else { return nil }
+        _ = chunks
+        return dict
     }
 
     /// Movimenti punti (guadagnati e spesi). Richiede il login dell'account.
