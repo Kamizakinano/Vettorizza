@@ -10,8 +10,9 @@ struct Provider: TimelineProvider {
     }
     func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> Void) {
         Task {
-            var w = WidgetData.load() ?? WidgetData(updated: .distantPast, handle: "Kamy29")
-            await PublicStats.merge(into: &w)
+            let fromApp = WidgetData.load()
+            var w = fromApp ?? WidgetData(updated: .distantPast, handle: "Kamy29")
+            await PublicStats.merge(into: &w, standalone: fromApp == nil)
             let e = Entry(date: Date(), data: w.updated == .distantPast ? nil : w)
             completion(Timeline(entries: [e], policy: .after(Date().addingTimeInterval(30 * 60))))
         }
@@ -74,13 +75,24 @@ struct NoData: View {
     }
 }
 
+struct Waiting: View {
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "clock").foregroundStyle(purple)
+            Text("I dati di oggi partono dall'01:00 (giorno MakerWorld)").font(.caption).multilineTextAlignment(.center).foregroundStyle(.secondary)
+        }
+    }
+}
+
 // MARK: Widget Punti (piccolo / medio / grande)
 struct PointsView: View {
     @Environment(\.widgetFamily) var family
     let e: Entry
     var body: some View {
         Group {
-            if let w = e.data {
+            if let w = e.data, w.waiting {
+                Waiting()
+            } else if let w = e.data {
                 switch family {
                 case .systemMedium: medium(w)
                 case .systemLarge: large(w)
@@ -96,7 +108,7 @@ struct PointsView: View {
             Text(fmt(p) + (big ? "" : "")).font(.system(size: big ? 34 : 30, weight: .bold)).minimumScaleFactor(0.6).lineLimit(1)
             Text("+\(fmt(w.pointsToday)) oggi" + (w.perDay.map { " · ~\(fmt($0))/g" } ?? "")).font(.caption.bold()).foregroundStyle(.green).lineLimit(1)
         } else {
-            Text("Punti non disponibili").font(.caption).foregroundStyle(.secondary)
+            Text("Punti visibili solo nell'app").font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -193,7 +205,9 @@ struct TodayView: View {
     let e: Entry
     var body: some View {
         Group {
-            if let w = e.data {
+            if let w = e.data, w.waiting {
+                Waiting()
+            } else if let w = e.data {
                 VStack(alignment: .leading, spacing: 6) {
                     Header(text: "OGGI")
                     Spacer(minLength: 0)
