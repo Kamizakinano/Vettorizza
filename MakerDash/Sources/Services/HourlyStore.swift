@@ -73,10 +73,10 @@ final class HourlyStore: ObservableObject {
     func bestWindow(_ m: Metric) -> (start: Int, value: Double)? {
         let h = byHour(m)
         guard h.contains(where: { $0 > 0 }) else { return nil }
-        let best = (0..<24).max { a, b in
-            (0..<3).map { h[(a + $0) % 24] }.reduce(0, +) < (0..<3).map { h[(b + $0) % 24] }.reduce(0, +)
-        }!
-        return (best, (0..<3).map { h[(best + $0) % 24] }.reduce(0, +))
+        func win(_ a: Int) -> Double { h[a % 24] + h[(a + 1) % 24] + h[(a + 2) % 24] }
+        var best = 0
+        for a in 1..<24 where win(a) > win(best) { best = a }
+        return (best, win(best))
     }
 
     var daysCovered: Double {
