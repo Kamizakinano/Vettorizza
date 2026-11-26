@@ -437,12 +437,13 @@ final class StatsStore: ObservableObject {
             async let ptsReq: Void = loadPointsToday(h, enabled: known)
             let (all, histRes, _, _) = await (allReq, histReq, hourlyReq, ptsReq)
             if let all, h == handle { record(ProfileStats(page), designs: all) }
+            var histFailed = false
             if let hist = histRes {
                 var acc = data[h] ?? AccountData(); acc.creatorDaily = hist; data[h] = acc; save()
-            }
+            } else if ProfileStats(page).pointsKnown == true { histFailed = true }
             if let old, let new = stats { await notifyMilestones(old: old, new: new) }
             updateWidget()
-            error = nil
+            error = histFailed ? "Storico Creator Center non aggiornato: riprova trascinando in basso" : nil
         } catch is CancellationError {
             // aggiornamento sostituito da uno nuovo: nessun errore da mostrare
         } catch {

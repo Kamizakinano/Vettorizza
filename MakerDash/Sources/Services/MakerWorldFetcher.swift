@@ -106,7 +106,7 @@ final class MakerWorldFetcher: NSObject, WKNavigationDelegate {
         // Una sola richiesta per l'ultimo anno: il Creator Center restituisce comunque una voce per ogni giorno (UTC).
         await progress(0, 1)
         let end = cal.startOfDay(for: Date())
-        let start = cal.date(byAdding: .day, value: -399, to: end)!
+        let start = cal.date(byAdding: .year, value: -1, to: end)!
         defer { Task { await progress(1, 1) } }
         guard let res = try? await v.callAsyncJavaScript(js, arguments: ["e": f.string(from: end), "s": f.string(from: start)], contentWorld: .page),
               let text = res as? String, !text.isEmpty,
