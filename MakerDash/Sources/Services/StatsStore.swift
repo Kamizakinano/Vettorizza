@@ -126,15 +126,34 @@ final class StatsStore: ObservableObject {
         case \ProfileStats.likes: f = { $0.l }
         case \ProfileStats.collections: f = { $0.c }
         case \ProfileStats.followers: f = { $0.f }
+        case \ProfileStats.boosts: f = { $0.b ?? 0 }; if hourly.last?.b == nil { return nil }
         default: return nil
         }
         let t = date.timeIntervalSince1970
-        guard let a = hourly.last(where: { TimeInterval($0.t) <= t }),
-              let b = hourly.first(where: { TimeInterval($0.t) >= t }),
+        let pool = kp == \ProfileStats.boosts ? hourly.filter { $0.b != nil } : hourly
+        guard let a = pool.last(where: { TimeInterval($0.t) <= t }),
+              let b = pool.first(where: { TimeInterval($0.t) >= t }),
               t - TimeInterval(a.t) <= 3 * 3600, TimeInterval(b.t) - t <= 3 * 3600 else { return nil }
         if a.t == b.t { return Double(f(a)) }
         return Double(f(a)) + Double(f(b) - f(a)) * (t - TimeInterval(a.t)) / TimeInterval(b.t - a.t)
     }
+
+    /// Contatori di un modello interpolati a mezzanotte di oggi (dai campioni orari).
+    func designAtMidnight(_ id: Int) -> DesignCounts? {
+        guard handle.lowercased() == "kamy29" else { return nil }
+        let t = Calendar.current.startOfDay(for: Date()).timeIntervalSince1970
+        let pool = hourly.filter { $0.m?[String(id)] != nil }
+        guard let a = pool.last(where: { TimeInterval($0.t) <= t }), let b = pool.first(where: { TimeInterval($0.t) >= t }),
+              t - TimeInterval(a.t) <= 3 * 3600, TimeInterval(b.t) - t <= 3 * 3600,
+              let va = a.m?[String(id)], let vb = b.m?[String(id)], va.count >= 5, vb.count >= 5 else { return nil }
+        let k = a.t == b.t ? 0 : (t - TimeInterval(a.t)) / TimeInterval(b.t - a.t)
+        func v(_ i: Int) -> Int { Int((Double(va[i]) + Double(vb[i] - va[i]) * k).rounded()) }
+        return DesignCounts(downloads: v(0), prints: v(1), likes: v(2), collections: v(3), comments: 0, boosts: v(4))
+    }
+
+    /// Punti ricevuti oggi (da mezzanotte) dai movimenti punti; nil se non disponibili.
+    @Published var pointsTodayIncome: Double?
+    private var pointsTodayDay: String?
 
     /// Incremento di oggi da mezzanotte a ora.
     /// 1) con i campioni orari: valore alla prima apertura di oggi meno quanto è cresciuto da mezzanotte a quel momento;
@@ -162,8 +181,28 @@ final class StatsStore: ObservableObject {
     }
 
     func deltaPoints() -> Double {
+        if let p = pointsTodayIncome, pointsTodayDay == Self.dayString(Date()) { return p }
         guard let s = snapshot else { return 0 }
         return (s.latest.pointsRegular + s.latest.pointsExclusive) - (s.startOfDay.pointsRegular + s.startOfDay.pointsExclusive)
+    }
+
+    /// Somma dei punti entrati oggi dalle voci dello storico punti (esattamente da mezzanotte).
+    func loadPointsToday(_ h: String, enabled: Bool) async {
+        guard enabled else { return }
+        let midnight = Calendar.current.startOfDay(for: Date())
+        var sum = 0.0, off = 0
+        while off < 500 {
+            guard let page = await MakerWorldFetcher.shared.fetchPointBills(handle: h, offset: off, limit: 50) else { return }
+            var older = false
+            for b in page.hits {
+                guard let d = b.date else { continue }
+                if d < midnight { older = true; break }
+                if b.change > 0 { sum += b.change }
+            }
+            off += page.hits.count
+            if older || page.hits.isEmpty || off >= page.total { break }
+        }
+        if h == handle { pointsTodayIncome = sum; pointsTodayDay = Self.dayString(Date()) }
     }
     func delta(design: Design, _ kp: KeyPath<Design, Int>) -> Int {
         guard let start = snapshot?.designsStart[design.id] else { return 0 }
@@ -217,8 +256,9 @@ final class StatsStore: ObservableObject {
         let prevDays = (acc.designDaily ?? [:]).keys.filter { $0 < day }.sorted()
         let prev = prevDays.last.flatMap { acc.designDaily?[$0] }
         let start = acc.designDayStart?[day] ?? [:]
+        let isToday = day == Self.dayString(Date())
         return end.compactMap { id, e -> DesignDay? in
-            guard let base = prev?[id] ?? start[id] else { return nil }
+            guard let base = (isToday ? designAtMidnight(id) : nil) ?? prev?[id] ?? start[id] else { return nil }
             let g = e - base
             guard !g.isZero else { return nil }
             let i = acc.designInfo?[id]
@@ -366,7 +406,9 @@ final class StatsStore: ObservableObject {
             async let allReq = MakerWorldFetcher.shared.fetchAllDesigns(handle: h)
             async let histReq = MakerWorldFetcher.shared.fetchCreatorHistory(handle: h)
             async let hourlyReq: Void = loadHourly()
-            let (all, histRes, _) = await (allReq, histReq, hourlyReq)
+            let known = ProfileStats(page).pointsKnown == true
+            async let ptsReq: Void = loadPointsToday(h, enabled: known)
+            let (all, histRes, _, _) = await (allReq, histReq, hourlyReq, ptsReq)
             if let all, h == handle { record(ProfileStats(page), designs: all) }
             if let hist = histRes {
                 var acc = data[h] ?? AccountData(); acc.creatorDaily = hist; data[h] = acc; save()

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Campioni orari raccolti da GitHub Actions (branch stats-data) per capire gli orari migliori.
-struct HourlySample: Codable { let t: Int; let d: Int; let p: Int; let l: Int; let c: Int; let f: Int }
+struct HourlySample: Codable { let t: Int; let d: Int; let p: Int; let l: Int; let c: Int; let f: Int; var b: Int?; var m: [String: [Int]]? }
 struct HourlyFile: Codable { let handle: String; let samples: [HourlySample] }
 
 @MainActor
