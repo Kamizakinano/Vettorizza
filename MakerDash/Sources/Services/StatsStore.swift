@@ -102,14 +102,57 @@ final class StatsStore: ObservableObject {
     }
 
     // MARK: Delta giornalieri
-    /// Incremento di oggi stimato dalla mezzanotte: se ho l'ultimo valore di ieri e il primo di oggi
-    /// (con i loro orari) interpolo il valore a mezzanotte; altrimenti uso il primo valore di oggi.
+    /// Campioni orari (GitHub) per fissare esattamente la mezzanotte. Solo per Kamy29.
+    @Published var hourly: [HourlySample] = {
+        if let d = UserDefaults.standard.data(forKey: "hourly.Kamy29"),
+           let f = try? JSONDecoder().decode(HourlyFile.self, from: d) { return f.samples.sorted { $0.t < $1.t } }
+        return []
+    }() { didSet { gainsCache.removeAll() } }
+
+    func loadHourly() async {
+        var req = URLRequest(url: HourlyStore.url); req.cachePolicy = .reloadIgnoringLocalCacheData
+        guard let (d, _) = try? await URLSession.shared.data(for: req),
+              let f = try? JSONDecoder().decode(HourlyFile.self, from: d) else { return }
+        UserDefaults.standard.set(d, forKey: "hourly.Kamy29")
+        hourly = f.samples.sorted { $0.t < $1.t }
+    }
+
+    /// Valore orario interpolato a una certa data (nil se non ci sono campioni entro 3 ore prima e dopo).
+    private func hourlyValue(_ kp: KeyPath<ProfileStats, Int>, at date: Date) -> Double? {
+        let f: (HourlySample) -> Int
+        switch kp {
+        case \ProfileStats.downloads: f = { $0.d }
+        case \ProfileStats.prints: f = { $0.p }
+        case \ProfileStats.likes: f = { $0.l }
+        case \ProfileStats.collections: f = { $0.c }
+        case \ProfileStats.followers: f = { $0.f }
+        default: return nil
+        }
+        let t = date.timeIntervalSince1970
+        guard let a = hourly.last(where: { TimeInterval($0.t) <= t }),
+              let b = hourly.first(where: { TimeInterval($0.t) >= t }),
+              t - TimeInterval(a.t) <= 3 * 3600, TimeInterval(b.t) - t <= 3 * 3600 else { return nil }
+        if a.t == b.t { return Double(f(a)) }
+        return Double(f(a)) + Double(f(b) - f(a)) * (t - TimeInterval(a.t)) / TimeInterval(b.t - a.t)
+    }
+
+    /// Incremento di oggi da mezzanotte a ora.
+    /// 1) con i campioni orari: valore alla prima apertura di oggi meno quanto è cresciuto da mezzanotte a quel momento;
+    /// 2) altrimenti interpolo tra l'ultimo valore di ieri e il primo di oggi;
+    /// 3) altrimenti dalla prima apertura di oggi.
     func delta(_ kp: KeyPath<ProfileStats, Int>) -> Int {
         guard let s = snapshot else { return 0 }
         let cal = Calendar.current, midnight = cal.startOfDay(for: Date())
         let first = Double(s.startOfDay[keyPath: kp])
         var base = first
-        if let y = cal.date(byAdding: .day, value: -1, to: midnight),
+        let useHourly = handle.lowercased() == "kamy29"
+        if useHourly, let t1 = s.created, let h1 = hourlyValue(kp, at: t1), let h0 = hourlyValue(kp, at: midnight) {
+            base = first - (h1 - h0)
+        } else if useHourly, s.created == nil, let h0 = hourlyValue(kp, at: midnight), let last = hourly.last,
+                  let hl = hourlyValue(kp, at: Date(timeIntervalSince1970: TimeInterval(last.t))) {
+            // primo giorno dopo l'aggiornamento: crescita oraria da mezzanotte all'ultimo campione
+            return Int((hl - h0).rounded())
+        } else if let y = cal.date(byAdding: .day, value: -1, to: midnight),
            let prev = current.history[Self.dayString(y)],
            let t0 = current.prevDayEnd, let t1 = s.created, t1 > t0, t0 < midnight, t1 >= midnight {
             let p = Double(prev[keyPath: kp])
@@ -117,6 +160,7 @@ final class StatsStore: ObservableObject {
         }
         return Int((Double(s.latest[keyPath: kp]) - base).rounded())
     }
+
     func deltaPoints() -> Double {
         guard let s = snapshot else { return 0 }
         return (s.latest.pointsRegular + s.latest.pointsExclusive) - (s.startOfDay.pointsRegular + s.startOfDay.pointsExclusive)
@@ -321,7 +365,8 @@ final class StatsStore: ObservableObject {
             record(ProfileStats(page), designs: designs.isEmpty ? (page.recentDesigns?.hits ?? []) : designs)
             async let allReq = MakerWorldFetcher.shared.fetchAllDesigns(handle: h)
             async let histReq = MakerWorldFetcher.shared.fetchCreatorHistory(handle: h)
-            let (all, histRes) = await (allReq, histReq)
+            async let hourlyReq: Void = loadHourly()
+            let (all, histRes, _) = await (allReq, histReq, hourlyReq)
             if let all, h == handle { record(ProfileStats(page), designs: all) }
             if let hist = histRes {
                 var acc = data[h] ?? AccountData(); acc.creatorDaily = hist; data[h] = acc; save()
