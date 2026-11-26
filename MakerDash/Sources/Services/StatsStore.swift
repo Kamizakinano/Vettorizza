@@ -331,9 +331,10 @@ final class StatsStore: ObservableObject {
 
     /// Primo giorno con dati registrati.
     var firstRecordedDay: Date? {
-        (Array(current.history.keys) + Array((current.creatorDaily ?? [:]).keys)).min().flatMap { k -> Date? in
-            Self.dayFormatter.date(from: k)
-        }
+        // primo giorno con attività nel Creator Center (o, se manca, primo giorno salvato dall'app)
+        let cd = current.creatorDaily ?? [:]
+        let active = cd.filter { $0.value.download + $0.value.print + $0.value.like + $0.value.follower + $0.value.collect > 0 }.keys.min()
+        return (active ?? current.history.keys.min()).flatMap { Self.dayFormatter.date(from: $0) }
     }
 
     enum Grouping: String, CaseIterable { case giorno = "Giorno", settimana = "Settimana", mese = "Mese", anno = "Anno" }

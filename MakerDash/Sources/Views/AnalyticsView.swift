@@ -126,8 +126,8 @@ struct AnalyticsView: View {
                     Text("Tocca una barra o usa le frecce per cambiare periodo.")
                         .font(.caption2).foregroundStyle(.secondary)
                     if let first = store.firstRecordedDay {
-                        Text("Dati registrati dal \(first.formatted(date: .abbreviated, time: .omitted)): i giorni precedenti risultano a zero.")
-                            .font(.caption2).foregroundStyle(.orange)
+                        Text("Prima attività dal Creator Center: \(first.formatted(date: .abbreviated, time: .omitted)). Storico disponibile fino a 1 anno fa.")
+                            .font(.caption2).foregroundStyle(.secondary)
                     }
                 }
                 .padding()
