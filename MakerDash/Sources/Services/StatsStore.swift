@@ -138,10 +138,58 @@ final class StatsStore: ObservableObject {
         return Double(f(a)) + Double(f(b) - f(a)) * (t - TimeInterval(a.t)) / TimeInterval(b.t - a.t)
     }
 
+    /// Ore di scarto tra la mezzanotte italiana e l'inizio del giorno del Creator Center (misurato dai dati).
+    @Published var ccOffset: Int? = UserDefaults.standard.object(forKey: "ccOffsetHours") as? Int {
+        didSet { UserDefaults.standard.set(ccOffset, forKey: "ccOffsetHours"); gainsCache.removeAll() }
+    }
+    @Published var ccOffsetDays = UserDefaults.standard.integer(forKey: "ccOffsetDays") {
+        didSet { UserDefaults.standard.set(ccOffsetDays, forKey: "ccOffsetDays") }
+    }
+
+    /// Inizio del giorno di una data etichetta (stesso orario del Creator Center se già misurato).
+    func windowStart(_ label: Date) -> Date { label.addingTimeInterval(TimeInterval((ccOffset ?? 0) * 3600)) }
+    /// Inizio del "giorno" in corso.
+    var dayStart: Date {
+        let off = TimeInterval((ccOffset ?? 0) * 3600)
+        return Calendar.current.startOfDay(for: Date().addingTimeInterval(-off)).addingTimeInterval(off)
+    }
+
+    /// Confronta i giorni chiusi del Creator Center con i controlli orari per trovare a che ora inizia il loro giorno.
+    func calibrateCreatorDay() {
+        guard handle.lowercased() == "kamy29", hourly.count > 24 else { return }
+        let cd = current.creatorDaily ?? [:]
+        guard let lastCC = cd.keys.max() else { return }
+        let days = cd.keys.filter { $0 != lastCC }.compactMap { k -> (Date, CreatorDay)? in
+            guard let d = Self.dayFormatter.date(from: k), let c = cd[k] else { return nil }
+            return (d, c)
+        }
+        var best: (off: Int, err: Double, n: Int)?
+        for off in -48...24 {
+            var err = 0.0, n = 0
+            for (d, c) in days {
+                let a = d.addingTimeInterval(TimeInterval(off * 3600)), b = a.addingTimeInterval(86400)
+                guard let d0 = hourlyValue(\.downloads, at: a), let d1 = hourlyValue(\.downloads, at: b),
+                      let p0 = hourlyValue(\.prints, at: a), let p1 = hourlyValue(\.prints, at: b) else { continue }
+                err += abs((d1 - d0) - Double(c.download)) + abs((p1 - p0) - Double(c.print)); n += 1
+            }
+            guard n > 0 else { continue }
+            let e = err / Double(n)
+            if best == nil || n > best!.n || (n == best!.n && e < best!.err) { best = (off, e, n) }
+        }
+        if let b = best { ccOffset = b.off; ccOffsetDays = b.n }
+    }
+
+    /// Testo leggibile: a che ora (italiana) inizia il giorno del Creator Center.
+    var ccDayDescription: String? {
+        guard let o = ccOffset else { return nil }
+        let h = ((o % 24) + 24) % 24
+        return String(format: "%02d:00", h)
+    }
+
     /// Contatori di un modello interpolati a mezzanotte di oggi (dai campioni orari).
     func designAtMidnight(_ id: Int) -> DesignCounts? {
         guard handle.lowercased() == "kamy29" else { return nil }
-        let t = Calendar.current.startOfDay(for: Date()).timeIntervalSince1970
+        let t = dayStart.timeIntervalSince1970
         let pool = hourly.filter { $0.m?[String(id)] != nil }
         guard let a = pool.last(where: { TimeInterval($0.t) <= t }), let b = pool.first(where: { TimeInterval($0.t) >= t }),
               t - TimeInterval(a.t) <= 3 * 3600, TimeInterval(b.t) - t <= 3 * 3600,
@@ -161,7 +209,7 @@ final class StatsStore: ObservableObject {
     /// 3) altrimenti dalla prima apertura di oggi.
     func delta(_ kp: KeyPath<ProfileStats, Int>) -> Int {
         guard let s = snapshot else { return 0 }
-        let cal = Calendar.current, midnight = cal.startOfDay(for: Date())
+        let cal = Calendar.current, midnight = dayStart
         let first = Double(s.startOfDay[keyPath: kp])
         var base = first
         let useHourly = handle.lowercased() == "kamy29"
@@ -171,7 +219,7 @@ final class StatsStore: ObservableObject {
                   let hl = hourlyValue(kp, at: Date(timeIntervalSince1970: TimeInterval(last.t))) {
             // primo giorno dopo l'aggiornamento: crescita oraria da mezzanotte all'ultimo campione
             return Int((hl - h0).rounded())
-        } else if let y = cal.date(byAdding: .day, value: -1, to: midnight),
+        } else if ccOffset == nil, let y = cal.date(byAdding: .day, value: -1, to: midnight),
            let prev = current.history[Self.dayString(y)],
            let t0 = current.prevDayEnd, let t1 = s.created, t1 > t0, t0 < midnight, t1 >= midnight {
             let p = Double(prev[keyPath: kp])
@@ -189,7 +237,7 @@ final class StatsStore: ObservableObject {
     /// Somma dei punti entrati oggi dalle voci dello storico punti (esattamente da mezzanotte).
     func loadPointsToday(_ h: String, enabled: Bool) async {
         guard enabled else { return }
-        let midnight = Calendar.current.startOfDay(for: Date())
+        let midnight = dayStart
         var sum = 0.0, off = 0
         while off < 500 {
             guard let page = await MakerWorldFetcher.shared.fetchPointBills(handle: h, offset: off, limit: 50) else { return }
@@ -232,8 +280,8 @@ final class StatsStore: ObservableObject {
             guard let d0 = cal.date(byAdding: .day, value: -i, to: today) else { return nil }
             // oggi: stesso valore mostrato in Stats
             if i == 0 { return snapshot?.day == Self.dayString(today) ? DayPoint(date: d0, value: delta(kp)) : nil }
-            if i > 0, useHourlyDays, let next = cal.date(byAdding: .day, value: 1, to: d0),
-               let a = hourlyValue(kp, at: d0), let b = hourlyValue(kp, at: next) {
+            if i > 0, useHourlyDays, Self.dayString(d0) == lastCC || cd[Self.dayString(d0)] == nil,
+               let a = hourlyValue(kp, at: windowStart(d0)), let b = hourlyValue(kp, at: windowStart(d0).addingTimeInterval(86400)) {
                 // giorno coperto dai controlli orari: esattamente da mezzanotte a mezzanotte (ora italiana)
                 return DayPoint(date: d0, value: Int((b - a).rounded()))
             }
@@ -421,6 +469,7 @@ final class StatsStore: ObservableObject {
             if let hist = histRes {
                 var acc = data[h] ?? AccountData(); acc.creatorDaily = hist; data[h] = acc; save()
             }
+            calibrateCreatorDay()
             if let old, let new = stats { await notifyMilestones(old: old, new: new) }
             updateWidget()
             error = nil
