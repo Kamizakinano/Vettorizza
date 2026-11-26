@@ -246,19 +246,18 @@ final class StatsStore: ObservableObject {
         let today = todayLabel
         let h = current.history
         let cd = current.creatorDaily ?? [:]
-        let lastCC = cd.keys.max()
         let useHourlyDays = handle.lowercased() == "kamy29"
         return (0..<days).reversed().compactMap { i -> DayPoint? in
             guard let d0 = cal.date(byAdding: .day, value: -i, to: today) else { return nil }
             // oggi: stesso valore mostrato in Stats
             if i == 0 { return snapshot != nil ? DayPoint(date: d0, value: delta(kp)) : nil }
-            if i > 0, useHourlyDays, Self.dayString(d0) == lastCC || cd[Self.dayString(d0)] == nil,
+            if i > 0, useHourlyDays, cd[Self.dayString(d0)] == nil,
                let a = hourlyValue(kp, at: windowStart(d0)), let b = hourlyValue(kp, at: windowStart(d0).addingTimeInterval(86400)) {
                 // giorno coperto dai controlli orari: esattamente da mezzanotte a mezzanotte (ora italiana)
                 return DayPoint(date: d0, value: Int((b - a).rounded()))
             }
             // Creator Center: l'ultimo giorno che restituisce è ancora in corso (cambia a ogni ricarica), lo salto
-            if i > 0, Self.dayString(d0) != lastCC, let c = cd[Self.dayString(d0)], let v = c.value(kp) { return DayPoint(date: d0, value: v) }
+            if i > 0, let c = cd[Self.dayString(d0)], let v = c.value(kp) { return DayPoint(date: d0, value: v) }
             guard let d = Optional(d0),
                   let prev = cal.date(byAdding: .day, value: -1, to: d),
                   let cur = h[Self.dayString(d)] else { return nil }
