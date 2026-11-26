@@ -32,20 +32,56 @@ final class HourlyStore: ObservableObject {
 
     enum Metric: String, CaseIterable { case download = "Download", stampe = "Stampe" }
 
-    /// Incrementi tra campioni consecutivi, attribuiti all'ora (locale) del campione finale.
-    /// Gli intervalli più lunghi di 3 ore vengono scartati (dati mancanti).
-    private func deltas(_ m: Metric) -> [(date: Date, value: Double)] {
-        guard samples.count > 1 else { return [] }
-        var out: [(Date, Double)] = []
-        for (a, b) in zip(samples, samples.dropFirst()) {
-            let gap = Double(b.t - a.t)
-            guard gap > 0, gap <= 3 * 3600 else { continue }
-            let v = Double(m == .download ? b.d - a.d : b.p - a.p)
-            guard v >= 0 else { continue }
-            // normalizza a "per ora" se l'intervallo non è di un'ora esatta
-            out.append((Date(timeIntervalSince1970: TimeInterval(b.t) - gap / 2), v * 3600 / gap))
+    struct Bucket: Identifiable { let start: Date; let value: Int; var id: Date { start } }
+
+    /// Valore interpolato a un istante (nil se i campioni attorno distano più di 3 ore).
+    private func value(_ m: Metric, at t: TimeInterval) -> Double? {
+        func f(_ x: HourlySample) -> Double { Double(m == .download ? x.d : x.p) }
+        guard let a = samples.last(where: { TimeInterval($0.t) <= t }),
+              let b = samples.first(where: { TimeInterval($0.t) >= t }),
+              t - TimeInterval(a.t) <= 3 * 3600, TimeInterval(b.t) - t <= 3 * 3600 else { return nil }
+        if a.t == b.t { return f(a) }
+        return f(a) + (f(b) - f(a)) * (t - TimeInterval(a.t)) / TimeInterval(b.t - a.t)
+    }
+
+    /// Prima mezzanotte da cui i dati sono completi.
+    var startDate: Date? {
+        guard let f = samples.first else { return nil }
+        let cal = Calendar.current, d = Date(timeIntervalSince1970: TimeInterval(f.t))
+        let mid = cal.startOfDay(for: d)
+        return mid == d ? mid : cal.date(byAdding: .day, value: 1, to: mid)
+    }
+
+    /// Incrementi ora per ora (orologio esatto: 00:00-01:00, 01:00-02:00...) a partire da mezzanotte.
+    func buckets(_ m: Metric) -> [Bucket] {
+        guard let start = startDate, let last = samples.last else { return [] }
+        var out: [Bucket] = []
+        var t = start.timeIntervalSince1970
+        let end = TimeInterval(last.t)
+        while t + 3600 <= end {
+            if let a = value(m, at: t), let b = value(m, at: t + 3600) {
+                out.append(Bucket(start: Date(timeIntervalSince1970: t), value: max(0, Int((b - a).rounded()))))
+            }
+            t += 3600
         }
         return out
+    }
+
+    /// Ore di oggi (dalla mezzanotte), con l'ora in corso parziale.
+    func today(_ m: Metric) -> [Bucket] {
+        let mid = Calendar.current.startOfDay(for: Date())
+        var out = buckets(m).filter { $0.start >= mid }
+        if let last = samples.last {
+            let t = (out.last.map { $0.start.timeIntervalSince1970 + 3600 }) ?? mid.timeIntervalSince1970
+            if TimeInterval(last.t) > t, let a = value(m, at: t), let b = value(m, at: TimeInterval(last.t)) {
+                out.append(Bucket(start: Date(timeIntervalSince1970: t), value: max(0, Int((b - a).rounded()))))
+            }
+        }
+        return out
+    }
+
+    private func deltas(_ m: Metric) -> [(date: Date, value: Double)] {
+        buckets(m).map { ($0.start, Double($0.value)) }
     }
 
     /// Media per ora del giorno (0...23).
@@ -80,7 +116,7 @@ final class HourlyStore: ObservableObject {
     }
 
     var daysCovered: Double {
-        guard let f = samples.first, let l = samples.last else { return 0 }
-        return Double(l.t - f.t) / 86400
+        guard let f = startDate, let l = samples.last else { return 0 }
+        return max(0, (TimeInterval(l.t) - f.timeIntervalSince1970) / 86400)
     }
 }
