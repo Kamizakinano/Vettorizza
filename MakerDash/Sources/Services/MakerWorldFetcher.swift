@@ -79,43 +79,46 @@ final class MakerWorldFetcher: NSObject, WKNavigationDelegate {
     }
 
     /// Storico giornaliero (ultimo anno) dal Creator Center: richiede il login dell'account.
-    func fetchCreatorHistory(handle: String) async -> [String: CreatorDay]? {
+    /// Storico giornaliero del Creator Center (giorni in UTC). Chiede blocchi da 20 giorni,
+    /// perché su intervalli lunghi il Creator Center raggruppa più giorni in una voce.
+    func fetchCreatorHistory(handle: String, progress: @escaping @MainActor (Int, Int) -> Void = { _, _ in }) async -> [String: CreatorDay]? {
         let h = handle.hasPrefix("@") ? String(handle.dropFirst()) : handle
         let v = webView(for: h)
-        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
-        let end = f.string(from: Date())
-        let start = f.string(from: Calendar.current.date(byAdding: .day, value: -399, to: Date())!)
-        // Il Creator Center su intervalli lunghi raggruppa più giorni in una sola voce:
-        // chiedo blocchi da 20 giorni, così ogni voce è un giorno solo.
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "UTC")!
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; f.timeZone = cal.timeZone
+        let chunks = 20
         let js = """
+        const r = await fetch(`/it/my/data-overview/model?endDate=${e}&startDate=${s}`, {credentials:'include', cache:'no-store'});
+        if (!r.ok) return '';
+        const html = await r.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const el = doc.getElementById('__NEXT_DATA__'); if (!el) return '';
+        const j = JSON.parse(el.textContent);
+        const list = j?.props?.pageProps?.statisticalData?.dateList || [];
         const out = {};
-        const day = 86400000;
-        let endT = Date.parse(e + 'T00:00:00Z');
-        const startT = Date.parse(s + 'T00:00:00Z');
-        while (endT >= startT) {
-          const st = Math.max(startT, endT - 19 * day);
-          const fmt = t => new Date(t).toISOString().slice(0, 10);
-          const r = await fetch(`/it/my/data-overview/model?endDate=${fmt(endT)}&startDate=${fmt(st)}`, {credentials:'include', cache:'no-store'});
-          if (!r.ok) break;
-          const html = await r.text();
-          const doc = new DOMParser().parseFromString(html, 'text/html');
-          const el = doc.getElementById('__NEXT_DATA__'); if (!el) break;
-          const j = JSON.parse(el.textContent);
-          const list = j?.props?.pageProps?.statisticalData?.dateList || [];
-          for (const d of list) {
-            const k = (d.intervalVal || '').replaceAll('/', '-');
-            if (!k) continue;
-            out[k] = {follower:d.follower|0, boost:d.boost|0, like:d.like|0, download:d.download|0, print:d.print|0, collect:d.collect|0, point:(d.pointFromModel||0)+(d.pointFromInst||0)};
-          }
-          endT = st - day;
+        for (const d of list) {
+          const k = (d.intervalVal || '').replaceAll('/', '-');
+          if (!k) continue;
+          out[k] = {follower:d.follower|0, boost:d.boost|0, like:d.like|0, download:d.download|0, print:d.print|0, collect:d.collect|0, point:(d.pointFromModel||0)+(d.pointFromInst||0)};
         }
         return JSON.stringify(out);
         """
-        guard let res = try? await v.callAsyncJavaScript(js, arguments: ["e": end, "s": start], contentWorld: .page),
-              let text = res as? String, !text.isEmpty,
-              let dict = try? JSONDecoder().decode([String: CreatorDay].self, from: Data(text.utf8)),
-              !dict.isEmpty else { return nil }
-        return dict
+        var all: [String: CreatorDay] = [:]
+        var ok = 0
+        var end = cal.startOfDay(for: Date())
+        for i in 0..<chunks {
+            await progress(i, chunks)
+            let start = cal.date(byAdding: .day, value: -19, to: end)!
+            if let res = try? await v.callAsyncJavaScript(js, arguments: ["e": f.string(from: end), "s": f.string(from: start)], contentWorld: .page),
+               let text = res as? String, !text.isEmpty,
+               let dict = try? JSONDecoder().decode([String: CreatorDay].self, from: Data(text.utf8)) {
+                all.merge(dict) { a, _ in a }
+                ok += 1
+            }
+            end = cal.date(byAdding: .day, value: -1, to: start)!
+        }
+        await progress(chunks, chunks)
+        return ok >= chunks / 2 && !all.isEmpty ? all : nil
     }
 
     /// Movimenti punti (guadagnati e spesi). Richiede il login dell'account.

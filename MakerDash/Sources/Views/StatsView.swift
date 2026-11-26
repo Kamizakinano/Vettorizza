@@ -8,6 +8,12 @@ struct StatsView: View {
         NavigationStack {
             ScrollView {
                 AccountPicker()
+                if let p = store.historyProgress {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Scarico lo storico dal Creator Center… \(Int(p * 100))%").font(.caption).foregroundStyle(.secondary)
+                        ProgressView(value: p).tint(.green)
+                    }.padding(.horizontal)
+                }
                 if let err = store.error { Text(err).foregroundStyle(.red).padding(.horizontal) }
                 if let s = store.stats {
                     if s.pointsKnown == true { NavigationLink { PointsHistoryView() } label: { pointsCard(s) }.buttonStyle(.plain) } else { Text("Punti: accedi con questo account in Settings → Login per i punti").font(.caption).foregroundStyle(.secondary).padding() }

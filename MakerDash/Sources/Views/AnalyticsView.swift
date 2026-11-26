@@ -57,6 +57,12 @@ struct AnalyticsView: View {
         NavigationStack {
             ScrollView {
                 AccountPicker()
+                if let p = store.historyProgress {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Scarico lo storico dal Creator Center… \(Int(p * 100))%").font(.caption).foregroundStyle(.secondary)
+                        ProgressView(value: p).tint(.green)
+                    }.padding(.horizontal)
+                }
                 VStack(alignment: .leading, spacing: 14) {
                     NavigationLink { BestHoursView() } label: {
                         HStack {

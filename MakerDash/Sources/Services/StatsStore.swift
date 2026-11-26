@@ -72,6 +72,8 @@ final class StatsStore: ObservableObject {
     @Published private(set) var designs: [Design] = []
     @Published var error: String?
     @Published var loading = false
+    /// Avanzamento dello scaricamento dello storico Creator Center (0...1), nil se fermo.
+    @Published var historyProgress: Double?
     private var loadingSince: Date?
 
     private let key = "accountData.v2"
@@ -420,7 +422,7 @@ final class StatsStore: ObservableObject {
     func refresh() async {
         guard !handle.isEmpty else { error = "Aggiungi il tuo username in Settings"; return }
         // evita due aggiornamenti in parallelo, ma non restare bloccato se uno si è piantato
-        if loading, let t = loadingSince, Date().timeIntervalSince(t) < 45 { return }
+        if loading, let t = loadingSince, Date().timeIntervalSince(t) < 120 { return }
         loading = true; loadingSince = Date()
         defer { loading = false; loadingSince = nil }
         let h = handle
@@ -430,7 +432,7 @@ final class StatsStore: ObservableObject {
             // Profilo subito a schermo, poi modelli e storico in parallelo
             record(ProfileStats(page), designs: designs.isEmpty ? (page.recentDesigns?.hits ?? []) : designs)
             async let allReq = MakerWorldFetcher.shared.fetchAllDesigns(handle: h)
-            async let histReq = MakerWorldFetcher.shared.fetchCreatorHistory(handle: h)
+            async let histReq = MakerWorldFetcher.shared.fetchCreatorHistory(handle: h) { [weak self] i, n in self?.historyProgress = i < n ? Double(i) / Double(n) : nil }
             async let hourlyReq: Void = loadHourly()
             let known = ProfileStats(page).pointsKnown == true
             async let ptsReq: Void = loadPointsToday(h, enabled: known)
