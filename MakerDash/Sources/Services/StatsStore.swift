@@ -316,7 +316,7 @@ final class StatsStore: ObservableObject {
 
     /// Somma degli incrementi di una metrica in un intervallo.
     func sum(_ kp: KeyPath<ProfileStats, Int>, in interval: DateInterval) -> Int {
-        dailyGains(kp, days: 800).filter { interval.contains($0.date) }.map(\.value).reduce(0, +)
+        dailyGains(kp, days: 800).filter { $0.date >= interval.start && $0.date < interval.end }.map(\.value).reduce(0, +)
     }
 
     /// Media punti al giorno degli ultimi `days` giorni completi (dal Creator Center).
