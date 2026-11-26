@@ -1,0 +1,37 @@
+name: Statistiche orarie
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [claude/hopeful-brown-8oiixg]
+    paths: [scripts/collect_hourly.py, .github/workflows/hourly-stats.yml]
+
+permissions:
+  contents: write
+
+concurrency: hourly-stats
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepara branch dati
+        run: |
+          git config user.name "makerdash-bot"
+          git config user.email "makerdash-bot@users.noreply.github.com"
+          if git ls-remote --exit-code origin stats-data; then
+            git fetch origin stats-data && git worktree add data origin/stats-data && (cd data && git checkout -B stats-data)
+          else
+            git worktree add --orphan -b stats-data data
+          fi
+      - name: Raccogli
+        run: python3 scripts/collect_hourly.py Kamy29 1204206395 data/hourly/Kamy29.json
+      - name: Salva
+        run: |
+          cd data
+          git add -A
+          git commit -m "Dati orari $(date -u +%FT%TZ)"
+          git push origin stats-data
