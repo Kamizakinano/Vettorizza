@@ -32,7 +32,7 @@ if __name__ == "__main__":
     data = {"handle": name, "samples": []}
     if os.path.exists(out):
         data = json.load(open(out))
-    data["samples"] = [x for x in data["samples"] if x["t"] > s["t"] - 120 * 86400][-5000:] + [s]
+    data["samples"] = [x for x in data["samples"] if x["t"] > s["t"] - 60 * 86400][-12000:] + [s]
     # i dettagli per modello servono solo per oggi/ieri: li tengo 3 giorni
     for x in data["samples"]:
         if x["t"] < s["t"] - 3 * 86400: x.pop("m", None)
