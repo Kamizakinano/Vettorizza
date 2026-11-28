@@ -179,25 +179,37 @@ final class StatsStore: ObservableObject {
     /// 1) con i campioni orari: valore alla prima apertura di oggi meno quanto è cresciuto da mezzanotte a quel momento;
     /// 2) altrimenti interpolo tra l'ultimo valore di ieri e il primo di oggi;
     /// 3) altrimenti dalla prima apertura di oggi.
+    /// Somma dei contatori dei modelli: è la stessa base che usa il Creator Center
+    /// (il totale del profilo conta anche altri download/stampe e cresce circa il doppio).
+    private func designSum(_ kp: KeyPath<ProfileStats, Int>, _ list: [Design]) -> Int? {
+        switch kp {
+        case \ProfileStats.downloads: return list.map(\.downloadCount).reduce(0, +)
+        case \ProfileStats.prints: return list.map(\.printCount).reduce(0, +)
+        case \ProfileStats.likes: return list.map(\.likeCount).reduce(0, +)
+        case \ProfileStats.collections: return list.map(\.collectionCount).reduce(0, +)
+        case \ProfileStats.boosts: return list.map { $0.boostCnt ?? 0 }.reduce(0, +)
+        default: return nil
+        }
+    }
+
+    /// Incremento di oggi (giorno MakerWorld, dall'01:00 italiana), sulla stessa base del Creator Center.
     func delta(_ kp: KeyPath<ProfileStats, Int>) -> Int {
         guard let s = snapshot else { return 0 }
-        let cal = Calendar.current, midnight = dayStart
-        let first = Double(s.startOfDay[keyPath: kp])
-        var base = first
-        let useHourly = handle.lowercased() == "kamy29"
-        if useHourly, let t1 = s.created, let h1 = hourlyValue(kp, at: t1), let h0 = hourlyValue(kp, at: midnight) {
-            base = first - (h1 - h0)
-        } else if useHourly, s.created == nil, let h0 = hourlyValue(kp, at: midnight), let last = hourly.last,
-                  let hl = hourlyValue(kp, at: Date(timeIntervalSince1970: TimeInterval(last.t))) {
-            // primo giorno dopo l'aggiornamento: crescita oraria da mezzanotte all'ultimo campione
-            return Int((hl - h0).rounded())
-        } else if let y = cal.date(byAdding: .day, value: -1, to: midnight),
-           let prev = current.history[Self.dayString(y)],
-           let t0 = current.prevDayEnd, let t1 = s.created, t1 > t0, t0 < midnight, t1 >= midnight {
-            let p = Double(prev[keyPath: kp])
-            base = p + (first - p) * midnight.timeIntervalSince(t0) / t1.timeIntervalSince(t0)
+        let isFollowers = kp == \ProfileStats.followers
+        // valore attuale: somma dei modelli (o follower del profilo)
+        let now: Double? = isFollowers ? Double(s.latest.followers) : designSum(kp, designs).map(Double.init)
+        // 1) base esatta dai controlli ogni 10 minuti (Kamy29)
+        if handle.lowercased() == "kamy29", let h0 = hourlyValue(kp, at: dayStart) {
+            if let n = now, !designs.isEmpty || isFollowers { return max(0, Int((n - h0).rounded())) }
+            if let last = hourly.last, let hl = hourlyValue(kp, at: Date(timeIntervalSince1970: TimeInterval(last.t))) {
+                return max(0, Int((hl - h0).rounded()))
+            }
         }
-        return Int((Double(s.latest[keyPath: kp]) - base).rounded())
+        // 2) dalla prima apertura di oggi, sempre sulla somma dei modelli
+        if !isFollowers, let n = now, let st = designSum(kp, Array(s.designsStart.values)), !s.designsStart.isEmpty {
+            return max(0, Int(n) - st)
+        }
+        return s.latest[keyPath: kp] - s.startOfDay[keyPath: kp]
     }
 
     func deltaPoints() -> Double {
